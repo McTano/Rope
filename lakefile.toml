@@ -1,0 +1,10 @@
+name = "RowPredicates"
+version = "0.1.0"
+defaultTargets = ["rowpredicates"]
+
+[[lean_lib]]
+name = "RowPredicates"
+
+[[lean_exe]]
+name = "rowpredicates"
+root = "Main"
