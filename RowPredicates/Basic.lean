@@ -2,6 +2,7 @@ module
 
 import aesop
 public import RowPredicates.Label
+public import Std.Data.HashMap.Basic
 
 @[expose] public section
 
@@ -76,6 +77,20 @@ inductive PreRow.lack : PreRow -> (Label) -> Prop where
   | empty : PreRow.lack .empty l
   | rVar : l ≠ l -> PreRow.lack (PreRow.rVar s) l
   | extend : PreRow.lack r l -> l ≠ l' -> PreRow.lack (extend r l' t) l
+
+theorem PreRow.lack_extend_lack : lack (.extend r l' t) l -> lack r l
+| .extend h _ => h
+
+inductive PreRow.has_label : PreRow -> Label -> Prop where
+  | first : has_label (.extend r l _) l
+  | extend : (has_label r l) -> has_label (.extend r _ _) l
+
+theorem PreRow.has_label_neg_lack (h: has_label r l): ¬lack r l :=
+  λ hn =>
+    match h with
+    | .first => match hn with
+      | .extend _ _ => by contradiction
+    | .extend h' =>  (has_label_neg_lack h' (lack_extend_lack hn))
 
 inductive PreRow.disjoint : PreRow -> PreRow -> Prop where
   | refl : disjoint .empty .empty
@@ -221,30 +236,69 @@ instance : Std.IsPreorder Row where
 -- TODO fix this problem with defining the mutually recursive
 -- Equiv instances with an option in the way
 -- inductive Option.Equiv : (E: t -> t -> Prop) -> Option t -> Option t -> Prop where
--- | refl : Eq E .none .none
+-- | refl : Equiv E .none .none
 -- | inject {a b : t} : inst.Equiv a b -> Equiv (.some a) (.some b)
 
 -- instance [HasEquiv t] : HasEquiv (Option t) where
 --   Equiv := Option.Equiv
 
--- -- TODO define contexts, and add variable equivalence to this.
+-- TODO define contexts, and add variable equivalence to this.
 -- mutual
 -- instance : HasEquiv Ty where
---   Equiv := λ a b =>
---     match a, b with
---     | .none, .none => Equiv
+--   Equiv := λ a b => sorry
+  
 
 -- instance : HasEquiv Row where
---   Equiv := λ a b =>
---     ∀ l, Option.Equiv (inst := instHasEquivTy) (Row.type_at a l) (b.type_at l)
+--   h : Equiv := λ a b =>
+--     ∀ l, Ty.Equiv (Row.type_at a l).get (b.type_at l).get
 -- end
 
--- mutual
--- instance : Setoid Ty where
---   r := λ a b => sorry
---   iseqv := sorry
+def Row.equiv_helper (e : Context × Ty -> Context × Ty -> Prop) (c: Context) (a b: Row) (l : Label)
+   := (ha : ((Option.isSome (a.type_at l)) = true)) ->
+      (hb : (Option.isSome (b.type_at l)) = true) ->
+            ((e (c, (a.type_at l).get ha) (c, (b.type_at l).get hb)))
 
--- instance : Setoid Row where
---   r := Row.Equiv
---   iseqv := sorry
--- end
+def Context := Std.HashMap String Ty
+
+def Context.empty : Context := .emptyWithCapacity
+
+def Ty.TVar (s : String) : Ty :=
+  Ty.mk (PreTy.TVar s) Ty.WF.TVar
+
+mutual
+-- TODO incorporate Variable Lookup into Var Equality
+inductive VarEquiv : (p1 p2 : Context × String) -> Prop where
+| refl : VarEquiv p1 p2
+-- | lookup
+
+inductive Ty.Equiv : Context × Ty -> Context × Ty -> Prop where
+  | TVar : VarEquiv (c1, s1) (c2,s2) -> Ty.Equiv (c1, (Ty.TVar s1)) (c1, Ty.TVar p2)
+  -- | TFun :
+  -- | Singleton : Ty.WF (.Singleton l)
+  -- | Pi : PreRow -> Row.WF r -> Ty.WF (.Pi r)
+  -- | Sigma : PreRow -> Row.WF r -> Ty.WF (.Sigma r)
+
+inductive Row.Equiv : Row -> Row -> Prop where
+  -- | lack a b
+  | mk {a b : Row} :
+    (∀ (l: Label), 
+        (a.lack l = b.lack l)
+      -> (Option.isSome (a.type_at l) = Option.isSome (b.type_at l)))
+      -> Row.equiv_helper Ty.Equiv Context.empty a b l -> Row.Equiv a b
+end
+
+-- -- Defining an equivalence relation parameterized by a value `p`
+-- def paramEquiv (p : P) (x y : α) : Prop := sorry
+
+-- -- Proving it forms a Setoid (Equivalence, Symmetry, Transitivity) for each `p`
+-- instance (p : P) : Setoid (αWithParam p) where
+--   iseqv := ...
+
+-- Define Family or wrapped type over ty and row with context.
+instance : Setoid Ty where
+  r := λ a b => sorry
+  iseqv := sorry
+
+instance : Setoid (Row) where
+  r := Row.Equiv
+  iseqv := sorry
