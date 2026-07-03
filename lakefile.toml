@@ -8,3 +8,7 @@ name = "RowPredicates"
 [[lean_exe]]
 name = "rowpredicates"
 root = "Main"
+
+[[require]]
+name = "aesop"
+git = "https://github.com/leanprover-community/aesop"

@@ -1,5 +1,6 @@
- module
+module
 
+import aesop
 public import RowPredicates.Label
 
 @[expose] public section
@@ -80,12 +81,25 @@ inductive PreRow.disjoint : PreRow -> PreRow -> Prop where
   | refl : disjoint .empty .empty
   | extend : disjoint r1 r2 -> l1 ≠ l2 -> r1.lack l2 -> r2.lack l1 -> disjoint (.extend r1' l1 t1) (.extend r2' l2 t2)
 
+
+theorem disjoint_symm {r1 r2 : PreRow} (h: PreRow.disjoint r1 r2) : PreRow.disjoint r2 r1 :=
+  match h with
+  | .refl => .refl
+  | .extend a b c d => by
+    apply Rope.PreRow.disjoint.extend
+    constructor
+    symm
+    exact b
+    exact .empty
+    exact .empty
+
 inductive PreRow.unique_labels : PreRow -> Prop where
   | empty : unique_labels .empty
   | rVar : unique_labels (.rVar s)
   | extend : unique_labels r -> lack r l -> unique_labels (extend r l t)
 
 -- Row is concrete (Has explicit labels and is not a variable)
+-- `concrete` is shallow, so it imposes no constraints on structures nested inside the row
 inductive PreRow.concrete : PreRow -> Prop where
   | empty : concrete .empty
   | extend : concrete r -> Label.concrete l -> lack r l -> concrete (extend r l t)
@@ -107,40 +121,32 @@ end
 
 open PreRow Row.WF
 
--- I'll have to see how it feels to induct over these types?
-inductive Row : Type where
-| mk (inner : PreRow)
-     (wf : Row.WF inner) : Row
+-- TODO set up wellfounded induction over Rows and Tys
+structure Row : Type where
+  inner : PreRow
+  wf : Row.WF inner
 -- Row must be implemented on top of PreRow and bundle well-formedness invariant
 
-inductive Ty : Type where
-| mk (inner : PreTy)
-     (wf : Ty.WF inner) : Ty
+structure Ty : Type where
+  inner : PreTy
+  wf : Ty.WF inner
 
 notation "{}" => Row.empty
 notation l " : " t ", " tail => Row.extend tail l t
 notation "@@" t => Ty.TVar t
 
-def Row.inner : Row -> PreRow
-  | (.mk inner _) => inner
-
-def Row.wf : (r : Row) -> Row.WF r.inner
-  | (.mk _ wf) => wf
-
-
-
 def Row.unique_labels : Row -> Prop
-  | (.mk inner _) => inner.unique_labels
+  | .mk inner _ => inner.unique_labels
 
 -- A row lacks a label iff the inner (well-formed) pre-row lacks that label
 def Row.lack : Row -> Label -> Prop
-  | (.mk inner _), l => inner.lack l
+  | ⟨inner, _⟩, l => inner.lack l
 
 def Row.disjoint : Row -> Row -> Prop
-  | (.mk innerL _), (.mk innerR _) => innerL.disjoint innerR
+  | ⟨innerL, _⟩, ⟨innerR, _⟩ => innerL.disjoint innerR
 
 def Row.concrete : Row -> Prop
-  | (.mk inner _) => inner.concrete
+  | ⟨inner, _⟩ => inner.concrete
 
 theorem PreRow.unique_labels_lack_extend : PreRow.unique_labels (.extend r l t) -> PreRow.lack r l := by
   intro h
@@ -151,12 +157,13 @@ theorem PreRow.unique_labels_extend {pr : PreRow} {l t} : PreRow.unique_labels (
   cases pr <;> intro h
   apply unique_labels.empty
   apply unique_labels.rVar
-  cases h <;> assumption
 
-theorem row_unique_labels : ∀ (r : Row), Row.concrete r -> Row.unique_labels r
-  | (.mk inner wf) => by
-    intro h
-    cases h <;> simp [Row.unique_labels] <;> cases wf <;> constructor <;> assumption
+  cases h ;  
+  assumption
+
+theorem row_unique_labels : ∀ (r : Row), Row.unique_labels r
+  | {inner, wf} => by
+    simp [Row.unique_labels] ; cases wf <;> constructor <;> assumption
 
 -- This should (maybe?) bundle evidence eventually
 inductive Pred : Type where
@@ -164,7 +171,7 @@ inductive Pred : Type where
   | Concat (x: Row) (y: Row) (z: Row) :Pred
   | Eq (x: Row) (y: Row) : Pred
 
-def PreRow.typeAt (r: PreRow) (l: Label) : Option PreTy :=
+def PreRow.type_at (r: PreRow) (l: Label) : Option PreTy :=
   match r with
     | .empty => .none
     -- 
@@ -172,23 +179,35 @@ def PreRow.typeAt (r: PreRow) (l: Label) : Option PreTy :=
     | .extend r' l' t =>
       if (l = l')
       then .some t
-      else typeAt r' l
+      else type_at r' l
 
--- This should propagate the well-formedness invariant of the returned type
--- def typeAt (r: Row) (l: Label) : Option Ty :=
---   match r.inner.typeAt l with
---   | .some t => t
+def Row.type_at_helper (r : PreRow) (l : Label) (h : Row.WF r): Option Ty :=
+  match r with
+  | .empty => .none
+  | .rVar _ => .none
+  | .extend r' l' t =>
+     if (l = l')
+      then .some {inner := t, wf := (by cases h ; assumption)}
+      else type_at_helper r' l (by cases h ; assumption)
 
-def PreRow.contained_in (r1 r2: PreRow) : Prop :=
-  forall (l1 : Label), (typeAt r1 l1) = (typeAt r2 l1)
+def Row.type_at : Row -> Label -> Option Ty
+  | ⟨inner, wf⟩, l => type_at_helper inner l wf
 
-def Row.contained_in (a b : Row) : Prop :=
-  a.inner.contained_in b.inner
-  
+
+def PreRow.le (r1 r2: PreRow) : Prop :=
+  forall (l1 : Label), (type_at r1 l1) = (type_at r2 l1)
+
+def Row.le (a b : Row) : Prop :=
+  a.inner.le b.inner
+
+theorem lacks_extend_lacks {r: PreRow} {l1 l2: Label} {t: PreTy} (h_lack: lack (r.extend l2 t) l1) : lack r l1 :=
+  match h_lack with
+  | .extend h' _ => h'
+
 instance : LE Row where
-  le := Row.contained_in
+  le := Row.le
 
-def Row.contained_in_trans {r1 r2 r3 : Row} (h_1_2: contained_in r1 r2) (h_2_3: contained_in r2 r3): contained_in r1 r3 := by
+theorem Row.contained_in_trans {r1 r2 r3 : Row} (h_1_2: le r1 r2) (h_2_3: le r2 r3): le r1 r3 := by
   intro l;
   rw [h_1_2, h_2_3]
 
@@ -197,3 +216,35 @@ instance : Std.IsPreorder Row where
     by intro l
        rfl
   le_trans := λ _ _ _ => Row.contained_in_trans
+
+
+-- TODO fix this problem with defining the mutually recursive
+-- Equiv instances with an option in the way
+-- inductive Option.Equiv : (E: t -> t -> Prop) -> Option t -> Option t -> Prop where
+-- | refl : Eq E .none .none
+-- | inject {a b : t} : inst.Equiv a b -> Equiv (.some a) (.some b)
+
+-- instance [HasEquiv t] : HasEquiv (Option t) where
+--   Equiv := Option.Equiv
+
+-- -- TODO define contexts, and add variable equivalence to this.
+-- mutual
+-- instance : HasEquiv Ty where
+--   Equiv := λ a b =>
+--     match a, b with
+--     | .none, .none => Equiv
+
+-- instance : HasEquiv Row where
+--   Equiv := λ a b =>
+--     ∀ l, Option.Equiv (inst := instHasEquivTy) (Row.type_at a l) (b.type_at l)
+-- end
+
+-- mutual
+-- instance : Setoid Ty where
+--   r := λ a b => sorry
+--   iseqv := sorry
+
+-- instance : Setoid Row where
+--   r := Row.Equiv
+--   iseqv := sorry
+-- end
