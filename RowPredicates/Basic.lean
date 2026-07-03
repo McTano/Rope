@@ -33,6 +33,7 @@ inductive Term : Type where
 inductive Kind : Type where
   | KTy : Kind
   | KRow : Kind
+  | KLabel : Kind
 
 -- Assert that all fields in the field list have a term which satisfies the given propositional predicate
 inductive AllFields : (Pred: Term -> Prop) -> List Term -> Prop where
@@ -146,9 +147,9 @@ structure Ty : Type where
   inner : PreTy
   wf : Ty.WF inner
 
-notation "{}" => Row.empty
-notation l " : " t ", " tail => Row.extend tail l t
-notation "@@" t => Ty.TVar t
+-- notation "" => Row.empty
+-- notation l " : " t ", " tail => Row.extend tail l t
+-- notation "@@" t => Ty.TVar t
 
 def Row.unique_labels : Row -> Prop
   | .mk inner _ => inner.unique_labels
@@ -232,35 +233,34 @@ instance : Std.IsPreorder Row where
        rfl
   le_trans := λ _ _ _ => Row.contained_in_trans
 
-
--- TODO fix this problem with defining the mutually recursive
--- Equiv instances with an option in the way
--- inductive Option.Equiv : (E: t -> t -> Prop) -> Option t -> Option t -> Prop where
--- | refl : Equiv E .none .none
--- | inject {a b : t} : inst.Equiv a b -> Equiv (.some a) (.some b)
-
--- instance [HasEquiv t] : HasEquiv (Option t) where
---   Equiv := Option.Equiv
-
--- TODO define contexts, and add variable equivalence to this.
--- mutual
--- instance : HasEquiv Ty where
---   Equiv := λ a b => sorry
-  
-
--- instance : HasEquiv Row where
---   h : Equiv := λ a b =>
---     ∀ l, Ty.Equiv (Row.type_at a l).get (b.type_at l).get
--- end
-
 def Row.equiv_helper (e : Context × Ty -> Context × Ty -> Prop) (c: Context) (a b: Row) (l : Label)
    := (ha : ((Option.isSome (a.type_at l)) = true)) ->
       (hb : (Option.isSome (b.type_at l)) = true) ->
             ((e (c, (a.type_at l).get ha) (c, (b.type_at l).get hb)))
 
-def Context := Std.HashMap String Ty
+def KindType (k : Kind) : Type :=
+  match k with
+  | .KRow => Row
+  | .KTy => Ty
+  | .KLabel => Label
 
-def Context.empty : Context := .emptyWithCapacity
+def KindContext : Kind -> Type := λ k => Std.HashMap String (KindType k)
+
+def KindContext.empty {k : Kind} : KindContext k := .emptyWithCapacity
+
+structure Context where
+  rowContext : KindContext .KRow := .empty
+  typeContext : KindContext .KTy := .empty
+  labelContext : KindContext .KLabel := .empty
+  getContext (k: Kind) : KindContext k :=
+      match k with
+      | .KRow => rowContext
+      | .KTy => typeContext
+      | .KLabel => labelContext
+  get {k : Kind} (s: String) : Option (KindType k) := (getContext k).get? s
+  insert {k : Kind} (s: String) : Option (KindType k) := (getContext k).get? s
+
+def Context.empty : Context := {}
 
 def Ty.TVar (s : String) : Ty :=
   Ty.mk (PreTy.TVar s) Ty.WF.TVar
@@ -284,7 +284,7 @@ inductive Row.Equiv : Row -> Row -> Prop where
     (∀ (l: Label), 
         (a.lack l = b.lack l)
       -> (Option.isSome (a.type_at l) = Option.isSome (b.type_at l)))
-      -> Row.equiv_helper Ty.Equiv Context.empty a b l -> Row.Equiv a b
+      -> Row.equiv_helper Ty.Equiv .empty a b l -> Row.Equiv a b
 end
 
 -- -- Defining an equivalence relation parameterized by a value `p`
