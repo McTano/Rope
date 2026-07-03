@@ -190,19 +190,19 @@ inductive Pred : Type where
 def PreRow.type_at (r: PreRow) (l: Label) : Option PreTy :=
   match r with
     | .empty => .none
-    -- 
     | .rVar _ => .none
     | .extend r' l' t =>
-      if (l = l')
-      then .some t
-      else type_at r' l
+        if l.syntactic_match l'
+        then .some t
+        else type_at r' l
+
 
 def Row.type_at_helper (r : PreRow) (l : Label) (h : Row.WF r): Option Ty :=
   match r with
   | .empty => .none
   | .rVar _ => .none
   | .extend r' l' t =>
-     if (l = l')
+     if l.syntactic_match l'
       then .some {inner := t, wf := (by cases h ; assumption)}
       else type_at_helper r' l (by cases h ; assumption)
 
@@ -233,10 +233,6 @@ instance : Std.IsPreorder Row where
        rfl
   le_trans := λ _ _ _ => Row.contained_in_trans
 
-def Row.equiv_helper (e : Context × Ty -> Context × Ty -> Prop) (c: Context) (a b: Row) (l : Label)
-   := (ha : ((Option.isSome (a.type_at l)) = true)) ->
-      (hb : (Option.isSome (b.type_at l)) = true) ->
-            ((e (c, (a.type_at l).get ha) (c, (b.type_at l).get hb)))
 
 def KindType (k : Kind) : Type :=
   match k with
@@ -265,26 +261,47 @@ def Context.empty : Context := {}
 def Ty.TVar (s : String) : Ty :=
   Ty.mk (PreTy.TVar s) Ty.WF.TVar
 
+inductive WithContext {c : Context} (T : Type): Type where
+| wrap : T -> WithContext T
+
+def RowWithContext {c : Context} := WithContext (c := c) Row
+def TyWithContext {c : Context} := WithContext (c := c) Ty
+def LabelWithContext {c : Context} := WithContext (c := c) Label
+
+
+
+def unwrap : WithContext (c := c) T -> T
+| .wrap x => x
+
+def RowWithContext.type_at {c} (r: RowWithContext (c := c)) := (unwrap r).type_at
+
+def RowWithContext.lack {c} (r: RowWithContext (c := c)) := (unwrap r).lack
+
+def RowWithContext.equiv_helper {c : Context} (e : TyWithContext (c := c) -> TyWithContext (c := c) -> Prop) (a b: Row) (l : Label)
+   := (ha : ((Option.isSome (a.type_at l)) = true)) ->
+      (hb : (Option.isSome (b.type_at l)) = true) ->
+            ((e (.wrap ((a.type_at l).get ha))) (.wrap ((b.type_at l).get hb)))
+
 mutual
 -- TODO incorporate Variable Lookup into Var Equality
-inductive VarEquiv : (p1 p2 : Context × String) -> Prop where
+inductive VarEquiv {c : Context} : (p1 p2 : String) -> Prop where
 | refl : VarEquiv p1 p2
 -- | lookup
 
-inductive Ty.Equiv : Context × Ty -> Context × Ty -> Prop where
-  | TVar : VarEquiv (c1, s1) (c2,s2) -> Ty.Equiv (c1, (Ty.TVar s1)) (c1, Ty.TVar p2)
+inductive Ty.Equiv {c : Context} : TyWithContext (c := c) -> TyWithContext (c := c) -> Prop where
+  | TVar : VarEquiv s1 s2 -> Ty.Equiv (.wrap (Ty.TVar s1)) (.wrap (Ty.TVar s2))
   -- | TFun :
   -- | Singleton : Ty.WF (.Singleton l)
   -- | Pi : PreRow -> Row.WF r -> Ty.WF (.Pi r)
   -- | Sigma : PreRow -> Row.WF r -> Ty.WF (.Sigma r)
 
-inductive Row.Equiv : Row -> Row -> Prop where
+inductive Row.Equiv {c : Context} : RowWithContext (c := c) -> RowWithContext (c := c) -> Prop where
   -- | lack a b
-  | mk {a b : Row} :
+  | mk {a b : RowWithContext} :
     (∀ (l: Label), 
         (a.lack l = b.lack l)
       -> (Option.isSome (a.type_at l) = Option.isSome (b.type_at l)))
-      -> Row.equiv_helper Ty.Equiv .empty a b l -> Row.Equiv a b
+      -> RowWithContext.equiv_helper (Ty.Equiv (c := c)) (unwrap a) (unwrap b) l -> Row.Equiv a b
 end
 
 -- -- Defining an equivalence relation parameterized by a value `p`
@@ -294,11 +311,19 @@ end
 -- instance (p : P) : Setoid (αWithParam p) where
 --   iseqv := ...
 
--- Define Family or wrapped type over ty and row with context.
-instance : Setoid Ty where
-  r := λ a b => sorry
-  iseqv := sorry
+-- Define Family or wrapped type over ty, row, label with context, then define Equiv and Setoid over that.
+instance {c : Context} : Setoid (TyWithContext (c := c)) where
+  r := Ty.Equiv (c := c)
+  iseqv := {
+    refl := sorry
+    symm := sorry
+    trans := sorry
+  }
 
-instance : Setoid (Row) where
-  r := Row.Equiv
-  iseqv := sorry
+instance {c : Context} : Setoid (RowWithContext (c := c)) where
+  r := Row.Equiv (c := c)
+  iseqv := {
+    refl := sorry
+    symm := sorry
+    trans := sorry
+  }
