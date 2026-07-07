@@ -1,6 +1,6 @@
 module
 
-public import RowPredicates.Label
+public import Rope.Label
 
 @[expose] public section
 
@@ -93,4 +93,3 @@ theorem Row.unique_labels_extend {pr : Row} {l t} : Row.unique_labels (.extend p
 inductive Row.concrete : Row -> Prop where
   | empty : concrete .empty
   | extend : concrete r -> Label.concrete l -> lack r l -> concrete (extend r l t)
-

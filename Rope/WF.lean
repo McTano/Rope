@@ -1,6 +1,6 @@
 module
-public import RowPredicates.Pre
-public import RowPredicates.Label
+public import Rope.Pre
+public import Rope.Label
 
 @[expose] public section
 

@@ -1,8 +1,8 @@
 module
 
-public import RowPredicates.Kind
-public import RowPredicates.Label
-public import RowPredicates.WF
+public import Rope.Kind
+public import Rope.Label
+public import Rope.WF
 public import Std.Data.HashMap
 
 

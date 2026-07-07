@@ -1,9 +1,9 @@
 module
 
-public import RowPredicates.Kind
-public import RowPredicates.Label
-public import RowPredicates.Term
-public import RowPredicates.WF
+public import Rope.Kind
+public import Rope.Label
+public import Rope.Term
+public import Rope.WF
 
 @[expose] public section
 

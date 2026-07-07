@@ -1,7 +1,7 @@
 module
 
-public import RowPredicates.Kind
-public import RowPredicates.Label
+public import Rope.Kind
+public import Rope.Label
 
 namespace Term
 

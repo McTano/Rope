@@ -1,12 +1,12 @@
-name = "RowPredicates"
+name = "Rope"
 version = "0.1.0"
-defaultTargets = ["rowpredicates"]
+defaultTargets = ["rope"]
 
 [[lean_lib]]
-name = "RowPredicates"
+name = "Rope"
 
 [[lean_exe]]
-name = "rowpredicates"
+name = "rope"
 root = "Main"
 
 [[require]]
