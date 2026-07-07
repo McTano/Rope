@@ -158,6 +158,9 @@ def Row.unique_labels : Row -> Prop
 def Row.lack : Row -> Label -> Prop
   | ⟨inner, _⟩, l => inner.lack l
 
+def Row.has_label : Row -> Label -> Prop
+  | ⟨inner, _⟩, l => inner.has_label l
+
 def Row.disjoint : Row -> Row -> Prop
   | ⟨innerL, _⟩, ⟨innerR, _⟩ => innerL.disjoint innerR
 
@@ -211,7 +214,7 @@ def Row.type_at : Row -> Label -> Option Ty
 
 
 def PreRow.le (r1 r2: PreRow) : Prop :=
-  forall (l1 : Label), (type_at r1 l1) = (type_at r2 l1)
+  forall (l : Label), r2.has_label l -> r1.has_label l ∧ (type_at r1 l) = (type_at r2 l)
 
 def Row.le (a b : Row) : Prop :=
   a.inner.le b.inner
@@ -223,16 +226,25 @@ theorem lacks_extend_lacks {r: PreRow} {l1 l2: Label} {t: PreTy} (h_lack: lack (
 instance : LE Row where
   le := Row.le
 
-theorem Row.contained_in_trans {r1 r2 r3 : Row} (h_1_2: le r1 r2) (h_2_3: le r2 r3): le r1 r3 := by
-  intro l;
-  rw [h_1_2, h_2_3]
+theorem Row.le_inner_has_label {r1 r2 : Row} {l : Label } (h_le : r1 ≤ r2) (h_has : r2.inner.has_label l) : r1.inner.has_label l := by
+  simp [(.≤.), Row.le, PreRow.le] at h_le
+  apply (h_le _ h_has).left
+
+theorem Row.le_trans (r1 r2 r3 : Row) (h_1_2 : r1 ≤ r2) (h_2_3 : r2 ≤ r3) : r1 ≤ r3 :=
+  λ l h => by
+    apply And.intro
+    case left =>
+      apply le_inner_has_label h_1_2 (le_inner_has_label h_2_3 h)
+    case right =>
+      simp [(.≤.),Row.le,PreRow.le] at *
+      grind
+
+theorem Row.le_refl : ∀ (x : Row), x ≤ x :=
+  λ _ _ h => And.intro h rfl
 
 instance : Std.IsPreorder Row where
-  le_refl := λ x =>
-    by intro l
-       rfl
-  le_trans := λ _ _ _ => Row.contained_in_trans
-
+  le_refl := Row.le_refl
+  le_trans := Row.le_trans
 
 def Ty.TVar (s : String) : Ty :=
   Ty.mk (PreTy.TVar s) Ty.WF.TVar
@@ -264,26 +276,118 @@ def Ty.Sigma (r : Row) : Ty :=
 mutual
 
 inductive Ty.Equiv : Ty  -> Ty  -> Prop where
-  | refl : Ty.Equiv t t
-  | TVar : s1 = s2 -> Ty.Equiv (Ty.TVar s1) (Ty.TVar s2)
-  | TFun : Ty.Equiv a1 a2 -> Ty.Equiv r1 r2 -> Ty.Equiv (Ty.TFun a1 r1) (Ty.TFun a2 r2)
-  | Singleton : l1 = l2 -> Ty.Equiv (Ty.Singleton l1) (Ty.Singleton l2)
+  | TVar : Ty.Equiv (Ty.TVar s) (Ty.TVar s)
+  | Singleton : Ty.Equiv (Ty.Singleton l) (Ty.Singleton l)
   | Pi : Row.Equiv r1 r2 -> Ty.Equiv (.Pi r1) (.Pi r2)
   | Sigma : Row.Equiv r1 r2 -> Ty.Equiv (.Sigma r1) (.Sigma r2)
+  | TFun : Ty.Equiv a1 a2 -> Ty.Equiv r1 r2 -> Ty.Equiv (Ty.TFun a1 r1) (Ty.TFun a2 r2)
 
 inductive Row.Equiv : Row  -> Row  -> Prop where
   | mk {a b : Row} : a ≤ b ∧ b ≤ a -> Row.Equiv a b
-
--- inductive Row.Equiv : Row  -> Row  -> Prop where
---   -- | lack a b
---   | mk {a b : Row} :
---     (∀ (l: Label),
---         (a.lack l = b.lack l)
---       -> (Option.isSome (a.type_at l) = Option.isSome (b.type_at l)))
---       -> (ha : ((Option.isSome (a.type_at l)) = true)) ->
---           (hb : (Option.isSome (b.type_at l)) = true) ->
---             ((Ty.Equiv ((a.type_at l).get ha)) ((b.type_at l).get hb)) -> Row.Equiv a b
 end
+
+theorem Row.Equiv.refl : ∀ r: Row, r.Equiv r :=
+  λ _ => .mk (And.intro
+          (instIsPreorderRow.le_refl _)
+          (instIsPreorderRow.le_refl _))
+
+theorem Row.Equiv.symm : ∀ {x y : Row}, x.Equiv y → y.Equiv x :=
+  λ h =>
+    match h with
+    | .mk (And.intro l r) => .mk (And.intro r l)
+
+theorem Row.Equiv.trans : ∀ {x y z: Row}, x.Equiv y → y.Equiv z → x.Equiv z := by
+  intro x y z h_x_y h_y_z
+  apply Equiv.mk
+  apply And.intro <;>
+    cases h_x_y <;> cases h_y_z <;>
+    simp [.≤.,Row.le,PreRow.le] at * <;>
+    grind
+
+-- theorem refold_ty (inner : PreTy) (wf : Ty.WF inner) : (Ty.mk inner wf) -> Ty :=
+--   sorry
+
+theorem Ty.Equiv.refl : ∀ x, Ty.Equiv x x :=
+  λ x => 
+      match x with
+      | .TVar _ => .TVar
+      | .Singleton _ => .Singleton
+      | ⟨.TFun arg ret, WF.TFun wf_a wf_r⟩ =>
+        @Equiv.TFun ⟨arg,wf_a⟩ ⟨arg,wf_a⟩ ⟨ret, wf_r⟩ ⟨ret, wf_r⟩ (.refl _) (.refl _)
+      | ⟨.Pi r, WF.Pi wf_r⟩ =>
+        @Equiv.Pi ⟨r, wf_r⟩ ⟨r, wf_r⟩ (Row.Equiv.refl _)
+      | ⟨.Sigma r, WF.Sigma wf_r⟩ =>
+        @Equiv.Sigma ⟨r, wf_r⟩ ⟨r, wf_r⟩ (Row.Equiv.refl _)
+
+theorem Ty.Equiv.symm : ∀ {x y : Ty}, x.Equiv y → y.Equiv x :=
+  λ h =>
+    match h with
+    | .TVar => Ty.Equiv.TVar
+    | .Singleton => .Singleton
+    | .TFun h1 h2 => .TFun (Ty.Equiv.symm h1) (Ty.Equiv.symm h2) 
+    | .Pi h => .Pi (Row.Equiv.symm h)
+    | .Sigma h => .Sigma (Row.Equiv.symm h)
+
+theorem Ty.Equiv.trans : ∀ {x y z : Ty}, x.Equiv y → y.Equiv z → x.Equiv z :=
+  @λ x y z h1 h2 =>
+    -- match h1, z with
+    -- -- | .TFun _ _, .TFun _ _ => sorry
+    -- | Equiv.TVar, .TVar _ => Equiv.refl _
+    -- | Equiv.Singleton, Equiv.Singleton => Equiv.refl _
+    -- | @Equiv.TFun x1 y1 x2 y2 hxy1 hxy2, h2' =>
+    --   by
+        -- case
+    match x, y, z with
+    | .TVar x', .TVar y', .TVar z' =>
+      by cases h1 ; cases h2; apply Equiv.refl
+    | .Singleton x', .Singleton y', .Singleton z' =>
+      by cases h1 ; cases h2; apply Equiv.refl
+    | ⟨.TFun _ _, _⟩, _, _ =>
+        match h1, h2 with
+        | @Equiv.TFun ⟨_,_⟩ ⟨_,_⟩ ⟨_,_⟩ ⟨_,_⟩ h1a h1r, Equiv.TFun h2a h2r =>
+          Equiv.TFun (Ty.Equiv.trans h1a h2a) (Ty.Equiv.trans h1r h2r)
+    | ⟨.Pi _, _⟩, _, _ =>
+      match h1, h2 with
+      | @Equiv.Pi _ ⟨_, _⟩ h_xy, Equiv.Pi h_yz => Ty.Equiv.Pi (Row.Equiv.trans h_xy h_yz)
+    | ⟨.Sigma _, _⟩, _, _ =>
+      match h1, h2 with
+      | @Equiv.Sigma _ ⟨_, _⟩ h_xy, Equiv.Sigma h_yz => Ty.Equiv.Sigma (Row.Equiv.trans h_xy h_yz)
+
+        
+    
+  -- intro x y z h_x_y h_y_z
+  -- case refl => exact h_y_z
+  -- case TVar h_seq =>
+  --   cases h_y_z
+  --   case refl a =>
+  --     rw [h_seq]
+  --     exact Equiv.refl
+  --   case TVar h_seq' =>
+  --     rw [<-h_seq', <- h_seq]
+  --     exact .refl
+  -- case TFun a1 a2 r1 r2 ha hr =>
+  --   case mk z_inner z_wf =>
+      
+  --   case TFun h1 h2 => exact .refl
+  --   case refl a => exact .refl
+  -- case Singleton _ => sorry
+  -- case Pi h => sorry
+  -- case Sigma h => sorry
+  -- λ x y z h_x_y h_y_z =>
+  --   match h_x_y with
+  --   | .refl => h_y_z
+  --   | .TVar h => by
+  --     rw [h]
+  --     apply h_y_z
+  --   | .TFun h1 h2 =>
+  --     -- | .refl => sorry
+  --     -- | ⟨z_inner, z_wf⟩ => by
+  --     -- match h_y_z with
+  --     -- | .Singleton => sorry
+  --     -- | _ => sorry
+  --   | .Singleton h => sorry
+  --   | .Pi h => sorry
+  --   | .Sigma h => sorry
 
 -- -- Defining an equivalence relation parameterized by a value `p`
 -- def paramEquiv (p : P) (x y : α) : Prop := sorry
@@ -296,20 +400,11 @@ end
 -- Define Family or wrapped type over ty, row, label with context, then define Equiv and Setoid over that.
 instance : Setoid Ty where
   r := Ty.Equiv
-  iseqv := {
-    refl {t} := .refl
-    symm := sorry
-    trans := sorry
-  }
+  iseqv := ⟨.refl, .symm, .trans⟩
 
 instance : Setoid Row where
   r := Row.Equiv 
-  iseqv := {
-    refl := sorry
-    symm := sorry
-    trans := sorry
-  }
-
+  iseqv := ⟨.refl, .symm, .trans⟩
 
 def KindType (k : Kind) : Type :=
   match k with
@@ -344,3 +439,4 @@ def unwrap : WithContext (c := c) T -> T
 def RowWithContext {c : Context} := WithContext (c := c) Row
 def TyWithContext {c : Context} := WithContext (c := c) Ty
 def LabelWithContext {c : Context} := WithContext (c := c) Label
+
