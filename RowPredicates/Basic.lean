@@ -131,8 +131,8 @@ inductive Ty.WF : (inner: PreTy) -> Prop where
   | TVar : Ty.WF (.TVar s)
   | TFun : Ty.WF arg -> Ty.WF ret -> Ty.WF (.TFun (arg: PreTy) (ret: PreTy))
   | Singleton : Ty.WF (.Singleton l)
-  | Pi : PreRow -> Row.WF r -> Ty.WF (.Pi r)
-  | Sigma : PreRow -> Row.WF r -> Ty.WF (.Sigma r)
+  | Pi : Row.WF r -> Ty.WF (.Pi r)
+  | Sigma : Row.WF r -> Ty.WF (.Sigma r)
 end
 
 open PreRow Row.WF
@@ -192,7 +192,7 @@ def PreRow.type_at (r: PreRow) (l: Label) : Option PreTy :=
     | .empty => .none
     | .rVar _ => .none
     | .extend r' l' t =>
-        if l.syntactic_match l'
+        if l = l'
         then .some t
         else type_at r' l
 
@@ -202,7 +202,7 @@ def Row.type_at_helper (r : PreRow) (l : Label) (h : Row.WF r): Option Ty :=
   | .empty => .none
   | .rVar _ => .none
   | .extend r' l' t =>
-     if l.syntactic_match l'
+     if l = l'
       then .some {inner := t, wf := (by cases h ; assumption)}
       else type_at_helper r' l (by cases h ; assumption)
 
@@ -234,6 +234,83 @@ instance : Std.IsPreorder Row where
   le_trans := λ _ _ _ => Row.contained_in_trans
 
 
+def Ty.TVar (s : String) : Ty :=
+  Ty.mk (PreTy.TVar s) Ty.WF.TVar
+
+def Ty.TFun (t1 t2 : Ty) : Ty :=
+  {
+    inner := (PreTy.TFun t1.inner t2.inner),
+    wf := (Ty.WF.TFun t1.wf t2.wf)
+  }
+
+def Ty.Singleton (l : Label) : Ty :=
+  {
+    inner := PreTy.Singleton l,
+    wf := Ty.WF.Singleton
+  }
+
+def Ty.Pi (r : Row) : Ty :=
+  {
+    inner := PreTy.Pi r.inner,
+    wf := WF.Pi r.wf
+  }
+
+def Ty.Sigma (r : Row) : Ty :=
+  {
+    inner := PreTy.Sigma r.inner,
+    wf := WF.Sigma r.wf
+  }
+
+mutual
+
+inductive Ty.Equiv : Ty  -> Ty  -> Prop where
+  | refl : Ty.Equiv t t
+  | TVar : s1 = s2 -> Ty.Equiv (Ty.TVar s1) (Ty.TVar s2)
+  | TFun : Ty.Equiv a1 a2 -> Ty.Equiv r1 r2 -> Ty.Equiv (Ty.TFun a1 r1) (Ty.TFun a2 r2)
+  | Singleton : l1 = l2 -> Ty.Equiv (Ty.Singleton l1) (Ty.Singleton l2)
+  | Pi : Row.Equiv r1 r2 -> Ty.Equiv (.Pi r1) (.Pi r2)
+  | Sigma : Row.Equiv r1 r2 -> Ty.Equiv (.Sigma r1) (.Sigma r2)
+
+inductive Row.Equiv : Row  -> Row  -> Prop where
+  | mk {a b : Row} : a ≤ b ∧ b ≤ a -> Row.Equiv a b
+
+-- inductive Row.Equiv : Row  -> Row  -> Prop where
+--   -- | lack a b
+--   | mk {a b : Row} :
+--     (∀ (l: Label),
+--         (a.lack l = b.lack l)
+--       -> (Option.isSome (a.type_at l) = Option.isSome (b.type_at l)))
+--       -> (ha : ((Option.isSome (a.type_at l)) = true)) ->
+--           (hb : (Option.isSome (b.type_at l)) = true) ->
+--             ((Ty.Equiv ((a.type_at l).get ha)) ((b.type_at l).get hb)) -> Row.Equiv a b
+end
+
+-- -- Defining an equivalence relation parameterized by a value `p`
+-- def paramEquiv (p : P) (x y : α) : Prop := sorry
+
+-- -- Proving it forms a Setoid (Equivalence, Symmetry, Transitivity) for each `p`
+-- instance (p : P) : Setoid (αWithParam p) where
+-- --   iseqv := ...
+
+-- Equality in a context is too complex for the initial definition.
+-- Define Family or wrapped type over ty, row, label with context, then define Equiv and Setoid over that.
+instance : Setoid Ty where
+  r := Ty.Equiv
+  iseqv := {
+    refl {t} := .refl
+    symm := sorry
+    trans := sorry
+  }
+
+instance : Setoid Row where
+  r := Row.Equiv 
+  iseqv := {
+    refl := sorry
+    symm := sorry
+    trans := sorry
+  }
+
+
 def KindType (k : Kind) : Type :=
   match k with
   | .KRow => Row
@@ -258,72 +335,12 @@ structure Context where
 
 def Context.empty : Context := {}
 
-def Ty.TVar (s : String) : Ty :=
-  Ty.mk (PreTy.TVar s) Ty.WF.TVar
-
 inductive WithContext {c : Context} (T : Type): Type where
 | wrap : T -> WithContext T
-
-def RowWithContext {c : Context} := WithContext (c := c) Row
-def TyWithContext {c : Context} := WithContext (c := c) Ty
-def LabelWithContext {c : Context} := WithContext (c := c) Label
-
-
 
 def unwrap : WithContext (c := c) T -> T
 | .wrap x => x
 
-def RowWithContext.type_at {c} (r: RowWithContext (c := c)) := (unwrap r).type_at
-
-def RowWithContext.lack {c} (r: RowWithContext (c := c)) := (unwrap r).lack
-
-def RowWithContext.equiv_helper {c : Context} (e : TyWithContext (c := c) -> TyWithContext (c := c) -> Prop) (a b: Row) (l : Label)
-   := (ha : ((Option.isSome (a.type_at l)) = true)) ->
-      (hb : (Option.isSome (b.type_at l)) = true) ->
-            ((e (.wrap ((a.type_at l).get ha))) (.wrap ((b.type_at l).get hb)))
-
-mutual
--- TODO incorporate Variable Lookup into Var Equality
-inductive VarEquiv {c : Context} : (p1 p2 : String) -> Prop where
-| refl : VarEquiv p1 p2
--- | lookup
-
-inductive Ty.Equiv {c : Context} : TyWithContext (c := c) -> TyWithContext (c := c) -> Prop where
-  | TVar : VarEquiv s1 s2 -> Ty.Equiv (.wrap (Ty.TVar s1)) (.wrap (Ty.TVar s2))
-  -- | TFun :
-  -- | Singleton : Ty.WF (.Singleton l)
-  -- | Pi : PreRow -> Row.WF r -> Ty.WF (.Pi r)
-  -- | Sigma : PreRow -> Row.WF r -> Ty.WF (.Sigma r)
-
-inductive Row.Equiv {c : Context} : RowWithContext (c := c) -> RowWithContext (c := c) -> Prop where
-  -- | lack a b
-  | mk {a b : RowWithContext} :
-    (∀ (l: Label), 
-        (a.lack l = b.lack l)
-      -> (Option.isSome (a.type_at l) = Option.isSome (b.type_at l)))
-      -> RowWithContext.equiv_helper (Ty.Equiv (c := c)) (unwrap a) (unwrap b) l -> Row.Equiv a b
-end
-
--- -- Defining an equivalence relation parameterized by a value `p`
--- def paramEquiv (p : P) (x y : α) : Prop := sorry
-
--- -- Proving it forms a Setoid (Equivalence, Symmetry, Transitivity) for each `p`
--- instance (p : P) : Setoid (αWithParam p) where
---   iseqv := ...
-
--- Define Family or wrapped type over ty, row, label with context, then define Equiv and Setoid over that.
-instance {c : Context} : Setoid (TyWithContext (c := c)) where
-  r := Ty.Equiv (c := c)
-  iseqv := {
-    refl := sorry
-    symm := sorry
-    trans := sorry
-  }
-
-instance {c : Context} : Setoid (RowWithContext (c := c)) where
-  r := Row.Equiv (c := c)
-  iseqv := {
-    refl := sorry
-    symm := sorry
-    trans := sorry
-  }
+def RowWithContext {c : Context} := WithContext (c := c) Row
+def TyWithContext {c : Context} := WithContext (c := c) Ty
+def LabelWithContext {c : Context} := WithContext (c := c) Label
