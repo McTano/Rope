@@ -33,3 +33,15 @@ inductive Term.WK : Term -> Kind -> Prop where
   | TVar : (name : String) -> WK (.TVar name) KTy
   | TFun : (Term.WK arg Ty) -> (Term.WK ret Ty) -> (Term.WK (TFun arg ret) Ty)
   | Row : (fields: List Term) -> (AllFields (λ t => Term.WK t .KTy) fields) -> (Term.WK (Row fields) KRow)
+
+inductive PredTerm : Type where
+  | Leq : Term -> Term -> PredTerm
+  | Eq : Term -> Term -> PredTerm
+    -- Garrett-style 3-place concatenation predicate
+    -- x + y ~ z
+  | Concat : Term -> Term -> Term -> PredTerm
+
+inductive PredTerm.WK : PredTerm -> Prop where
+  | Leq : Term.WK x KRow -> Term.WK y KRow -> PredTerm.WK (PredTerm.Leq x y)
+  | Eq : Term.WK x KRow -> Term.WK y KRow -> Term.WK y KRow -> PredTerm.WK (PredTerm.Concat x y z)
+  | Concat : Term.WK x KRow -> Term.WK y KRow -> Term.WK y KRow -> PredTerm.WK (PredTerm.Concat x y z)

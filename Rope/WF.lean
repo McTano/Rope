@@ -191,10 +191,10 @@ theorem Ty.Equiv.trans : ∀ {x y z : Ty}, x.Equiv y → y.Equiv z → x.Equiv z
 
 -- This definition of equivalence is syntactic, up to reordering of fields
 -- Equivalence of rows with respect to a context or substitution will be defined over quotients of well-formed rows and types
-instance : Setoid Ty where
+instance Ty.instSetoid : Setoid Ty where
   r := Ty.Equiv
   iseqv := ⟨.refl, .symm, .trans⟩
 
-instance : Setoid Row where
+instance Row.instSetoid : Setoid Row where
   r := Row.Equiv
   iseqv := ⟨.refl, .symm, .trans⟩
