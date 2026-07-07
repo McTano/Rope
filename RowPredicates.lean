@@ -2,4 +2,5 @@
 -- Import modules here that should be built as part of the library.
 import RowPredicates.Basic
 import RowPredicates.Label
-import RowPredicates.Row1
+import RowPredicates.Pre
+import RowPredicates.WF
