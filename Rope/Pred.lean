@@ -9,13 +9,14 @@ public import Rope.Basic
 
 namespace Pred
 
+
 -- This should (maybe?) bundle evidence eventually
 inductive Pred : Type where
-  | Leq (x: Row) (y: Row) : Pred
+  | Contain (x: Row) (y: Row) : Pred
     -- Garrett-style 3-place concatenation predicate
     -- x + y ~ z
-  | Concat (x: Row) (y: Row) (z: Row) : Pred
+  | Combine (x: Row) (y: Row) (z: Row) : Pred
   | Eq (x: Row) (y: Row) : Pred
 
-inductive Entailment : Pred -> Pred -> Prop where
-  -- | .refl () () : Pred
+inductive Entail : Pred -> Pred -> Prop where
+  -- | Contain : (x ≤ y) -> Entail x y

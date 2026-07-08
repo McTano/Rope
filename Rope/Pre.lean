@@ -12,7 +12,7 @@ mutual
 inductive Row : Type where
   | empty : Row -- (Identity for Concat)
   | rVar : String -> Row
-  | extend : Row -> Label -> Ty -> Row
+  | extend (r : Row) (l : Label)  (t : Ty) : Row
 
 inductive Ty : Type where
   | TVar (name : String) : Ty
@@ -40,8 +40,8 @@ theorem Row.lack_extend_lack : lack (.extend r l' t) l -> lack r l
 | .extend h _ => h
 
 inductive Row.has_label : Row -> Label -> Prop where
-  | first : has_label (.extend r l _) l
-  | extend : (has_label r l) -> has_label (.extend r _ _) l
+  | first {r l t} : has_label (.extend r l t) l
+  | extend {r l l' t} : (has_label r l) -> has_label (.extend r l' t) l
 
 theorem Row.has_label_neg_lack (h: has_label r l): ¬lack r l :=
   λ hn =>
@@ -58,7 +58,8 @@ inductive Row.disjoint : Row -> Row -> Prop where
 def Row.le (r1 r2: Row) : Prop :=
   forall (l : Label), r2.has_label l -> r1.has_label l ∧ (type_at r1 l) = (type_at r2 l)
 
-
+instance instLE : LE Row where
+  le := Row.le
 
 theorem Row.disjoint_symm {r1 r2 : Row} (h: Row.disjoint r1 r2) : Row.disjoint r2 r1 :=
   match h with

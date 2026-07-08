@@ -12,4 +12,4 @@ inductive Label.concrete : Label -> Prop where
  | literal : Label.concrete (.explicit s)
 
 -- Equality of labels is purely syntactic
-deriving instance BEq, DecidableEq, Ord, ReflBEq, LawfulBEq for Label
+deriving instance BEq, DecidableEq, Hashable, Ord, ReflBEq, LawfulBEq for Label
