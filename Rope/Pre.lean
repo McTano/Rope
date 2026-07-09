@@ -55,11 +55,6 @@ inductive Row.disjoint : Row -> Row -> Prop where
   | extend : disjoint r1 r2 -> l1 ≠ l2 -> r1.lack l2 -> r2.lack l1 -> disjoint (.extend r1' l1 t1) (.extend r2' l2 t2)
 
 
-def Row.le (r1 r2: Row) : Prop :=
-  forall (l : Label), r2.has_label l -> r1.has_label l ∧ (type_at r1 l) = (type_at r2 l)
-
-instance instLE : LE Row where
-  le := Row.le
 
 theorem Row.disjoint_symm {r1 r2 : Row} (h: Row.disjoint r1 r2) : Row.disjoint r2 r1 :=
   match h with

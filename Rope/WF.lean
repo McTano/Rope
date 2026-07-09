@@ -58,39 +58,40 @@ def Row.empty : Row := ⟨.empty, .empty⟩
 
 @[match_pattern]
 def Row.extend (r: Row) (l : Label) (t : Ty) (h: r.lack l) : Row  :=
-    ⟨Pre.Row.extend r.inner l t.inner, .extend r.wf h t.wf⟩
+    ⟨Pre.Row.extend r.inner l t.inner, WF_Row.extend r.wf h t.wf⟩
 
+@[match_pattern]
 def Row.rVar (name : String) : Row :=
   ⟨.rVar name, .rVar⟩
 
--- @[match_pattern]
--- def Ty.TFun (t1 t2 : Ty) : Ty :=
---   ⟨Pre.Ty.TFun t1.inner t2.inner, WF_Ty.TFun t1.wf t2.wf⟩
+@[match_pattern]
+def Ty.TVar (s : String) : Ty :=
+  ⟨Pre.Ty.TVar s, WF_Ty.TVar⟩
 
--- @[match_pattern]
--- def Ty.Singleton (l : Label) : Ty :=
---   {
---     inner := Pre.Ty.Singleton l,
---     wf := WF_Ty.Singleton
---   }
+@[match_pattern]
+def Ty.TFun (t1 t2 : Ty) : Ty :=
+  ⟨Pre.Ty.TFun t1.inner t2.inner, WF_Ty.TFun t1.wf t2.wf⟩
 
--- @[match_pattern]
--- def Ty.Pi (r : Row) : Ty :=
---   {
---     inner := Pre.Ty.Pi r.inner,
---     wf := WF_Ty.Pi r.wf
---   }
+@[match_pattern]
+def Ty.Singleton (l : Label) : Ty :=
+  {
+    inner := Pre.Ty.Singleton l,
+    wf := WF_Ty.Singleton
+  }
 
--- @[match_pattern]
--- def Ty.Sigma (r : Row) : Ty :=
---   {
---     inner := Pre.Ty.Sigma r.inner,
---     wf := WF_Ty.Sigma r.wf
---   }
+@[match_pattern]
+def Ty.Pi (r : Row) : Ty :=
+  {
+    inner := Pre.Ty.Pi r.inner,
+    wf := WF_Ty.Pi r.wf
+  }
 
--- inductive Row.has_label : Row -> Label -> Prop where
---   | first {r l t} : (h : r.lack l) -> has_label (.extend r l t h) l
---   | extend {r l l' t} : (h : r.lack l') -> r.has_label l -> has_label (.extend r l' t h) l
+@[match_pattern]
+def Ty.Sigma (r : Row) : Ty :=
+  {
+    inner := Pre.Ty.Sigma r.inner,
+    wf := WF_Ty.Sigma r.wf
+  }
 
 def Row.has_label (r : Row) (l : Label): Prop :=
   r.inner.has_label l
@@ -133,76 +134,21 @@ theorem Row.type_at_is_some {r : Row} {l: Label} (h : r.has_label l) : (Option.i
               apply Row.type_at_is_some
               simp [has_label,h]
           -- apply Row.type_at_is_some
-    
+
 def Row.type_at! (r: Row) (l: Label) (has_l : has_label r l) : Ty :=
   (r.type_at l).get (Row.type_at_is_some has_l)
-  
-
--- def Row.le (a b : Row) : Prop :=
---   a.inner.le b.inner
 
 theorem lacks_extend_lacks {r: Pre.Row} {l1 l2: Label} {t: Pre.Ty} (h_lack: Pre.Row.lack (r.extend l2 t) l1) : Pre.Row.lack r l1 :=
   match h_lack with
   | .extend h' _ => h'
 
-
-
-@[match_pattern]
-def Ty.TVar (s : String) : Ty :=
-  ⟨Pre.Ty.TVar s, WF_Ty.TVar⟩
-
-@[match_pattern]
-def Ty.TFun (t1 t2 : Ty) : Ty :=
-  ⟨Pre.Ty.TFun t1.inner t2.inner, WF_Ty.TFun t1.wf t2.wf⟩
-
-@[match_pattern]
-def Ty.Singleton (l : Label) : Ty :=
-  {
-    inner := Pre.Ty.Singleton l,
-    wf := WF_Ty.Singleton
-  }
-
-@[match_pattern]
-def Ty.Pi (r : Row) : Ty :=
-  {
-    inner := Pre.Ty.Pi r.inner,
-    wf := WF_Ty.Pi r.wf
-  }
-
-@[match_pattern]
-def Ty.Sigma (r : Row) : Ty :=
-  {
-    inner := Pre.Ty.Sigma r.inner,
-    wf := WF_Ty.Sigma r.wf
-  }
-
--- def get_helper : r.has_label l -> Option.isSome (type_at r l) := sorry
-
--- def le2_helper (e: Ty -> Ty -> Prop) (l : Label) (a b : Row) : Prop :=
---   (b.has_label l -> a.has_label l) ∧
---     (((a.has_label l ∧ b.has_label l )) -> e ((type_at a l).get) ((type_at b l).get (get_helper h.right)))
-
 mutual
--- inductive option_equiv  : Option Ty -> Option Ty -> Prop where
---   | none : option_equiv .none .none 
---   | some : (Ty.Equiv t1 t2) -> option_equiv (.some t1) (.some t2)
 inductive Row.le : Row -> Row -> Prop where
   | empty {r : Row} : Row.le .empty r
-  | rVar {name : String} : Row.le (.rVar name) (.rVar name)
-  | extend {a b : Row} {l : Label} {t : Ty} :
-    Row.le a b -> (h_lack : a.lack l) -> b.has_label l -> Row.le (@a.extend l t h_lack) b
--- | empty : Row.le2 Row.empty Row.empty
--- | head : Row.le2
--- | mk {a b : Row} : forall l, (a.has_label l -> b.has_label l) -> () -> Row.le a b
-
--- Alternate definition for le. Requires 1 less assumption in the extend case, but doesn't match our induction structure as well
-inductive Row.le2 : Row -> Row -> Prop where
-  | refl {r : Row} : Row.le2 r r
-  | extendR {a b : Row} {l : Label} {t : Ty} : (h_lack : b.lack l) -> Row.le2 a b -> Row.le2 a (b.extend l t h_lack)
+  | rVar {s : String} : Row.le (.rVar s) (.rVar s)
+  | extendR {a b : Row} {l : Label} {t : Ty} : (a_le_b: Row.le a b) -> (b_lack : b.lack l) ->  Row.le a (@Row.extend b l t b_lack)
   | extend2 {a b : Row} {l : Label} {ta tb : Ty} :
-    Row.le2 a b -> (ha_lack : a.lack l) -> (hb_lack : b.lack l) -> Ty.Equiv ta tb -> Row.le2 (a.extend l ta ha_lack) (b.extend l tb hb_lack)
--- def Row.le (a b: Row) : Prop :=
-  -- forall (l : Label), b.inner.has_label l -> a.inner.has_label l ∧ (type_at a l) = (type_at b l)
+    Row.le a b -> (a_lack : a.lack l) -> (b_lack : b.lack l) -> Ty.Equiv ta tb -> Row.le (@Row.extend a l ta a_lack) (@.extend b l tb b_lack)
 
 inductive Ty.Equiv : Ty  -> Ty  -> Prop where
   | TVar : Ty.Equiv (Ty.TVar s) (Ty.TVar s)
@@ -212,9 +158,6 @@ inductive Ty.Equiv : Ty  -> Ty  -> Prop where
   | TFun : Ty.Equiv a1 a2 -> Ty.Equiv r1 r2 -> Ty.Equiv (Ty.TFun a1 r1) (Ty.TFun a2 r2)
 end
 
-inductive Row.Equiv : WF.Row -> WF.Row  -> Prop where
-  | mk {a b : WF.Row} : Row.le a b ∧ Row.le b a -> Row.Equiv a b
-
 -- Ideas for deciding le and equiv
 -- sort row and compare in order
 -- convert row to a hashmap
@@ -223,71 +166,109 @@ inductive Row.Equiv : WF.Row -> WF.Row  -> Prop where
 instance : LE Row where
   le := Row.le
 
-def Row.ble (a b : Row) : Bool := sorry
+def Row.Equiv (a b : WF.Row) : Prop := a ≤ b ∧ b ≤ a
+
+-- def Row.ble (a b : Row) : Bool := sorry
 
 -- theorem Row.ble_decides_le : ∀ r1 r2: Row, r1.ble r2 = true <-> r1 ≤ r2 := by sorry
 
 -- instance : DecidableLE Row := by
 --   intro a b
---   by_cases a.ble b
+--   by_cases (a.ble b)
 --   case pos h =>
 --     apply Decidable.isTrue
 --     exact (Row.ble_decides_le a b).mp h
 --   case neg h =>
 --     sorry
 
+mutual
+inductive Pre.Row.measure : Pre.Row -> Nat -> Type where
+| empty : Row.measure Pre.Row.empty 0
+| rVar s : Row.measure (.rVar s) 0
+| extend {mr mt : Nat} r l t : (Row.measure r mr) -> Ty.measure t mt -> Row.measure (.extend r l t) (mr + mt + 2)
+
+inductive Pre.Ty.measure : Pre.Ty -> Nat -> Type where
+| TVar s : Ty.measure (.TVar s) 0
+| TFun t1 t2 : (Ty.measure t1 m1) -> Ty.measure t2 m2  -> Ty.measure (.TFun t1 t2) (m1 + m2 + 1)
+| Singleton (l : Label) : Ty.measure (.Singleton l) 1
+| Pi r : (Row.measure r mr) -> Ty.measure (.Pi r) (mr + 1)
+| Sigma r : (Row.measure r mr) -> Ty.measure (.Sigma r) (mr + 1)
+end
+
+mutual
+inductive Row.measure : WF.Row -> Nat -> Type where
+| mk {mr : Nat}  {r : Pre.Row} {wfr : WF_Row r} : Pre.Row.measure r mr -> WF.Row.measure (WF.Row.mk r wfr) (mr + 2)
+-- | .rVar _ => 0
+-- | ⟨Pre.Row.extend r _ _, _⟩ => 1 + Pre.Row.measure r
+
+inductive Ty.measure : WF.Ty -> Nat -> Type where
+| mk {mt : Nat} {t : Pre.Ty} {wft : WF_Ty t} : Pre.Ty.measure t mt -> WF.Ty.measure ⟨t, wft⟩ (mt + 2)
+-- | ⟨.TVar _,_⟩ => 1
+-- | ⟨.TFun t1 t2,_⟩ => Ty.measure t1 + Ty.measure t2
+-- | .Singleton _ => 1
+-- | ⟨.Pi r,_⟩ => Row.measure r
+-- | ⟨.Sigma r,_⟩ => Row.measure r
+end
+
+
+theorem Row.le.empty_bottom (r : Row) : .empty ≤ r :=
+  match r with
+  | Row.empty => .empty
+  -- This is why we need the .empty rule
+  | Row.rVar _ => .empty
+  | ⟨.extend _ _ _, WF_Row.extend _ _ _⟩ => .empty
+
+theorem Row.le.empty_is_refl {r : Row} : r ≤ .empty <-> r = .empty :=
+  Iff.intro (
+    λ h =>
+      match h with
+      | Row.le.empty => rfl 
+  ) (
+    λ h => by rw [h]; exact .empty)
+
+
+theorem Row.le.rVar_is_refl_or_empty {r : Row} {s : String} : r ≤ .rVar s <-> (r = .rVar s) ∨ (r = .empty) :=
+  Iff.intro (
+    λ h =>
+      match r with
+      | .empty => Or.inr rfl
+      | .rVar _ => Or.inl (by cases h; rfl)
+      | ⟨.extend r' l t, _⟩ => by contradiction
+  ) (
+    λ h  =>
+      match h with
+      | .inl e => by subst e; exact .rVar
+      | .inr e => by subst e; exact .empty
+  )
+
 theorem Row.le_inner_has_label {a b : Row} {l : Label } (h_le : a ≤ b) (h_has : a.inner.has_label l) : b.inner.has_label l :=
     match h_le with
     | .empty => by contradiction
-    | @Row.le.extend a' _ l' _ a'_le_b a'_lack_l' b_has_l' =>
-        dite (l = l')
-        (λ hpos => by
-          simp [hpos, Row.has_label,Row.extend] at *;
-          exact b_has_l')
-        (λ hneg =>
-          match h_has with
-          | .first => b_has_l'
-          | .extend h => @Row.le_inner_has_label a' b _ a'_le_b h)
+    | Row.le.extendR a'_le_b b_lack => by
+      apply Pre.Row.has_label.extend
+      apply Row.le_inner_has_label a'_le_b h_has
+    | @Row.le.extend2 a' b' l' _ _ a'_le_b' a_lack b_lack _ => by
+      by_cases (l = l')
+      case _ pos =>
+        subst pos
+        apply Pre.Row.has_label.first
+      case _ neg =>
+        cases h_has
+        case first => 
+          apply Pre.Row.has_label.first
+        case extend h =>
+          apply Pre.Row.has_label.extend
+          apply le_inner_has_label a'_le_b' h
 
-theorem Row.le_trans (a b c : Row) (h_a_b : a ≤ b) (h_b_c : b ≤ c) : a ≤ c :=
-  match h_a_b with
-  | .empty => .empty
-  | .rVar => sorry
-  | .extend a'_le_b h_lack h_lab =>
-    .extend (le_trans _ _ _ a'_le_b h_b_c) _ (Row.le_inner_has_label h_b_c h_lab)
-  -- by exact le_inner_has_label h_a_b (le_inner_has_label _ _)
+theorem Row.lift_lack {r : Pre.Row} {l : Label} {wfr : WF_Row r} (h : r.lack l) : lack ⟨r, wfr⟩ l := h
 
-  --   case right =>
-  --     simp [(.≤.),Row.le] at *
-  --     grind
-
-theorem Row.le_refl : ∀ (x : Row), x ≤ x :=
-  λ x =>
-  match x with
+mutual
+theorem Row.le.refl : ∀ {x : Row}, x ≤ x
   | Row.empty => .empty
   | .rVar _ => .rVar
-  | ⟨Pre.Row.extend r _ _, .extend _ _ _⟩ => sorry
+  | ⟨Pre.Row.extend r l t, .extend wfr r_lack wft⟩ => by
+    apply @Row.le.extend2 ⟨r,wfr⟩ ⟨r,wfr⟩ l ⟨t, wft⟩ ⟨t, wft⟩ .refl r_lack r_lack (.refl _)
 
-instance : Std.IsPreorder Row := ⟨Row.le_refl, Row.le_trans⟩
-
-theorem Row.Equiv.refl : ∀ (r: Row), r.Equiv r :=
-  λ _ => .mk (And.intro
-          (instIsPreorderRow.le_refl _)
-          (instIsPreorderRow.le_refl _))
-
-theorem Row.Equiv.symm : ∀ {x y : Row}, x.Equiv y → y.Equiv x :=
-  λ h =>
-    match h with
-    | .mk (And.intro l r) => .mk (And.intro r l)
-
-theorem Row.Equiv.trans : ∀ {x y z: Row}, x.Equiv y → y.Equiv z → x.Equiv z := by
-  intro x y z h_x_y h_y_z
-  apply Equiv.mk
-  apply And.intro <;>
-    cases h_x_y <;> cases h_y_z <;>
-    -- simp [.≤.,Row.le] at * <;>
-    -- grind
-    sorry
 
 theorem Ty.Equiv.refl : ∀ x : Ty, Ty.Equiv x x :=
   λ x =>
@@ -295,11 +276,24 @@ theorem Ty.Equiv.refl : ∀ x : Ty, Ty.Equiv x x :=
       | .TVar _ => .TVar
       | .Singleton _ => .Singleton
       | ⟨.TFun arg ret, WF_Ty.TFun wf_a wf_r⟩ =>
-        @Equiv.TFun ⟨arg,wf_a⟩ ⟨arg,wf_a⟩ ⟨ret, wf_r⟩ ⟨ret, wf_r⟩ (.refl _) (.refl _)
+        @Ty.Equiv.TFun ⟨arg,wf_a⟩ ⟨arg,wf_a⟩ ⟨ret, wf_r⟩ ⟨ret, wf_r⟩ (.refl _) (.refl _)
       | ⟨.Pi r, WF_Ty.Pi wf_r⟩ =>
-        @Equiv.Pi ⟨r, wf_r⟩ ⟨r, wf_r⟩ (Row.le_refl _) (Row.le_refl _)
+        @Ty.Equiv.Pi ⟨r, wf_r⟩ ⟨r, wf_r⟩ .refl .refl
       | ⟨.Sigma r, WF_Ty.Sigma wf_r⟩ =>
-        @Equiv.Sigma ⟨r, wf_r⟩ ⟨r, wf_r⟩ (Row.le_refl _) (Row.le_refl _)
+        @Ty.Equiv.Sigma ⟨r, wf_r⟩ ⟨r, wf_r⟩ .refl .refl
+end
+
+
+theorem Row.Equiv.refl : ∀ (r: Row), r.Equiv r :=
+  λ _ => (And.intro
+          .refl
+          .refl)
+
+theorem Row.Equiv.symm : ∀ {x y : Row}, x.Equiv y → y.Equiv x :=
+  λ h =>
+    match h with
+    | (And.intro l r) => (And.intro r l)
+
 
 theorem Ty.Equiv.symm : ∀ {x y : Ty}, x.Equiv y → y.Equiv x :=
   λ h =>
@@ -310,23 +304,81 @@ theorem Ty.Equiv.symm : ∀ {x y : Ty}, x.Equiv y → y.Equiv x :=
     | .Pi hl hr => .Pi hr hl
     | .Sigma hl hr => .Sigma hr hl
 
-theorem Ty.Equiv.trans : ∀ {x y z : Ty}, x.Equiv y → y.Equiv z → x.Equiv z :=
-  @λ x y z h1 h2 =>
+theorem Row.le.extend_le {a b : Pre.Row} {wfa : WF_Row a} {wfb : WF_Row b} {l : Label} {t : Pre.Ty} {wft : WF_Ty t} {a_lack : a.lack l} (h : Row.mk (a.extend l t) (wfa.extend a_lack wft) ≤ ⟨b,wfb⟩) : Row.mk a wfa ≤ ⟨b,wfb⟩ :=
+  by
+    cases h;
+    case extendR b_lack a_le_b => exact le.extendR (extend_le (wft := wft) (a_lack := a_lack) a_le_b) b_lack
+    case extend2 _ _ _ _ _ _ => apply le.extendR <;> assumption
+
+mutual
+theorem Row.le.trans {a b c : Pre.Row} {wfa : WF_Row a} {wfb : WF_Row b} {wfc : WF_Row c}
+  (h_a_b : (Row.mk a wfa) ≤ (Row.mk b wfb)) (h_b_c : (Row.mk b wfb) ≤ (Row.mk c wfc)) : (Row.mk a wfa) ≤ (Row.mk c wfc) :=
+  match h_a_b with
+  | .empty => .empty
+  | .rVar => h_b_c
+  | @Row.le.extendR ⟨_, _⟩ ⟨b',wfb'⟩ _ ⟨t,wft⟩ a_le_b' b'_lack_l' =>
+    match h_b_c with
+    | @Row.le.extend2 _ _ _ _ _ b'_le_c' hlack black t_eq' => Row.le.extendR (Row.le.trans a_le_b' b'_le_c') black
+    | @Row.le.extendR _ b2 _ _  b'_le_c' black => by
+      apply Row.le.extendR _ black
+      simp at b'_le_c'
+      apply Row.le.trans _ b'_le_c'
+      apply @Row.le.extendR ⟨a,wfa⟩ ⟨b',wfb'⟩ _ ⟨t,wft⟩ a_le_b' b'_lack_l'
+  | @Row.le.extend2 ⟨a', wfa'⟩ ⟨b',wfb'⟩ l ⟨ta,_⟩ ⟨tb, wftb⟩ a'_le_b' a_lack b_lack t_eq =>
+    match h_b_c with
+    | @Row.le.extend2 _ ⟨b'', wfb''⟩ _ _ _ hle hlack black t_eq' =>
+      by 
+        exact @Row.le.extend2 ⟨a', wfa'⟩ ⟨b'',wfb''⟩ l _ _ (@Row.le.trans a' _ b'' _ _ _ a'_le_b' hle) a_lack black (Ty.Equiv.trans t_eq t_eq')
+    | @Row.le.extendR ⟨_,_⟩ ⟨c',wfc'⟩ l' _ b_le_c' c_lack_l' => by
+        simp at *
+        have lem1 : Row.mk (a'.extend l ta) wfa ≤ ⟨b'.extend l tb, wfb⟩ := by
+          exact Row.le.extend2 a'_le_b' a_lack b_lack t_eq
+        have lem2 : Row.mk b' wfb' ≤ ⟨b'.extend l tb, wfb⟩ := by
+          apply Row.le.extendR .refl  (t := ⟨tb, wftb⟩) b_lack
+        have b'_le_c' : Row.mk b' wfb' ≤ ⟨c', wfc'⟩ := by
+          apply Row.le.extend_le <;> assumption
+        have lem3 : Row.mk a' wfa' ≤ ⟨c', wfc'⟩ := by
+          apply Row.le.trans a'_le_b' b'_le_c'
+        apply @Row.le.extendR _ ⟨c',wfc'⟩ l' _ _ c_lack_l'
+        apply @Row.le.trans _ _ _ _ _ _ lem1 b_le_c'
+  termination_by (sizeOf b, sizeOf c)
+
+theorem Ty.Equiv.trans {x y z : Pre.Ty} {wfx : WF_Ty x} {wfy : WF_Ty y} {wfz : WF_Ty z} :
+  (Ty.mk x wfx).Equiv (Ty.mk y wfy) → (Ty.mk y wfy).Equiv (Ty.mk z wfz) → (Ty.mk x wfx).Equiv (Ty.mk z wfz) :=
+  λ h1 h2 =>
     match x, y, z with
     | .TVar x', .TVar y', .TVar z' =>
-      by cases h1 ; cases h2; apply Equiv.refl
+      by cases h1 ; cases h2; apply Ty.Equiv.refl
     | .Singleton x', .Singleton y', .Singleton z' =>
-      by cases h1 ; cases h2; apply Equiv.refl
-    | ⟨.TFun _ _, _⟩, _, _ =>
+      by cases h1 ; cases h2; apply Ty.Equiv.refl
+    | .TFun _ _, _, _ =>
         match h1, h2 with
-        | @Equiv.TFun ⟨_,_⟩ ⟨_,_⟩ ⟨_,_⟩ ⟨_,_⟩ h1a h1r, Equiv.TFun h2a h2r =>
-          Equiv.TFun (Ty.Equiv.trans h1a h2a) (Ty.Equiv.trans h1r h2r)
-    | ⟨.Pi _, _⟩, _, _ =>
+        | @Ty.Equiv.TFun ⟨_,_⟩ ⟨_,_⟩ ⟨_,_⟩ ⟨_,_⟩ h1a h1r, Ty.Equiv.TFun h2a h2r =>
+          Ty.Equiv.TFun (Ty.Equiv.trans h1a h2a) (Ty.Equiv.trans h1r h2r)
+    | .Pi _, _, _ =>
+      have h1_symm := h1.symm
+      have h2_symm := h2.symm
       match h1, h2 with
-      | @Equiv.Pi _ ⟨_, _⟩ h_xy h_yx, Equiv.Pi h_yz h_zy => Ty.Equiv.Pi (Row.le_trans _ _ _ h_xy h_yz) (Row.le_trans _ _ _ h_zy h_yx)
-    | ⟨.Sigma _, _⟩, _, _ =>
+      | @Ty.Equiv.Pi _ ⟨b', wfb'⟩ h_xy h_yx, Ty.Equiv.Pi h_yz h_zy =>
+        by
+          apply Ty.Equiv.Pi
+            (Row.le.trans h_xy h_yz)
+            (Row.le.trans h_zy h_yx)
+    | .Sigma _, _, _ =>
       match h1, h2 with
-      | @Equiv.Sigma _ ⟨_, _⟩ h_xy h_yx, Equiv.Sigma h_yz h_zy => Ty.Equiv.Sigma (Row.le_trans _ _ _ h_xy h_yz) (Row.le_trans _ _ _ h_zy h_yx)
+      | @Ty.Equiv.Sigma _ ⟨_, _⟩ h_xy h_yx,Ty.Equiv.Sigma h_yz h_zy 
+        => Ty.Equiv.Sigma 
+          (Row.le.trans h_xy h_yz)
+          (Row.le.trans h_zy h_yx)
+termination_by (sizeOf y, sizeOf z)
+end
+
+
+theorem Row.Equiv.trans {x y z: Row} (h_x_y : x.Equiv y) (h_y_z : y.Equiv z) : x.Equiv z :=
+  And.intro (Row.le.trans h_x_y.left h_y_z.left) (Row.le.trans h_y_z.right h_x_y.right)
+
+instance : Std.IsPreorder Row := ⟨λ _ => Row.le.refl, λ _ _ _ => Row.le.trans⟩
+
 
 -- This definition of equivalence is syntactic, up to reordering of fields
 -- Equivalence of rows with respect to a context or substitution will be defined over quotients of well-formed rows and types
