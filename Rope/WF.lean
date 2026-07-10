@@ -29,11 +29,11 @@ theorem WF.unique_labels {r : Pre.Row} (wf : WF_Row r) : r.unique_labels :=
   | .rVar => .rVar
   | .extend r_wf r_lack_l ty_wf => Pre.Row.unique_labels.extend (WF.unique_labels r_wf) r_lack_l
 
--- TODO set up wellfounded induction over Rows and Tys
+-- WF.Row bundles Pre.Row with a well-formedness invariant
+-- TODO See if I can refactor this to make reasoning over these less awkward.
 structure Row : Type where
   inner : Pre.Row
   wf : WF_Row inner
--- Row must be implemented on top of Pre.Row and bundle well-formedness invariant
 
 structure Ty : Type where
   inner : Pre.Ty
@@ -158,15 +158,15 @@ inductive Ty.Equiv : Ty  -> Ty  -> Prop where
   | TFun : Ty.Equiv a1 a2 -> Ty.Equiv r1 r2 -> Ty.Equiv (Ty.TFun a1 r1) (Ty.TFun a2 r2)
 end
 
--- Ideas for deciding le and equiv
--- sort row and compare in order
--- convert row to a hashmap
--- Redefine a WF row to always be sorted, then define le inductively over the sorted row
-
 instance : LE Row where
   le := Row.le
 
 def Row.Equiv (a b : WF.Row) : Prop := a ≤ b ∧ b ≤ a
+
+-- TODO Ideas for deciding le and equiv
+-- sort row and compare in order
+-- convert row to a hashmap
+-- Redefine a WF row to always be sorted, then define le inductively over the sorted row
 
 -- def Row.ble (a b : Row) : Bool := sorry
 
@@ -180,36 +180,6 @@ def Row.Equiv (a b : WF.Row) : Prop := a ≤ b ∧ b ≤ a
 --     exact (Row.ble_decides_le a b).mp h
 --   case neg h =>
 --     sorry
-
-mutual
-inductive Pre.Row.measure : Pre.Row -> Nat -> Type where
-| empty : Row.measure Pre.Row.empty 0
-| rVar s : Row.measure (.rVar s) 0
-| extend {mr mt : Nat} r l t : (Row.measure r mr) -> Ty.measure t mt -> Row.measure (.extend r l t) (mr + mt + 2)
-
-inductive Pre.Ty.measure : Pre.Ty -> Nat -> Type where
-| TVar s : Ty.measure (.TVar s) 0
-| TFun t1 t2 : (Ty.measure t1 m1) -> Ty.measure t2 m2  -> Ty.measure (.TFun t1 t2) (m1 + m2 + 1)
-| Singleton (l : Label) : Ty.measure (.Singleton l) 1
-| Pi r : (Row.measure r mr) -> Ty.measure (.Pi r) (mr + 1)
-| Sigma r : (Row.measure r mr) -> Ty.measure (.Sigma r) (mr + 1)
-end
-
-mutual
-inductive Row.measure : WF.Row -> Nat -> Type where
-| mk {mr : Nat}  {r : Pre.Row} {wfr : WF_Row r} : Pre.Row.measure r mr -> WF.Row.measure (WF.Row.mk r wfr) (mr + 2)
--- | .rVar _ => 0
--- | ⟨Pre.Row.extend r _ _, _⟩ => 1 + Pre.Row.measure r
-
-inductive Ty.measure : WF.Ty -> Nat -> Type where
-| mk {mt : Nat} {t : Pre.Ty} {wft : WF_Ty t} : Pre.Ty.measure t mt -> WF.Ty.measure ⟨t, wft⟩ (mt + 2)
--- | ⟨.TVar _,_⟩ => 1
--- | ⟨.TFun t1 t2,_⟩ => Ty.measure t1 + Ty.measure t2
--- | .Singleton _ => 1
--- | ⟨.Pi r,_⟩ => Row.measure r
--- | ⟨.Sigma r,_⟩ => Row.measure r
-end
-
 
 theorem Row.le.empty_bottom (r : Row) : .empty ≤ r :=
   match r with
