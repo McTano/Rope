@@ -21,6 +21,7 @@ def KindContext : Kind -> Type := λ k => Std.HashMap String (KindType k)
 
 def KindContext.empty {k : Kind} : KindContext k := .emptyWithCapacity
 
+-- Q: Should lVars, tVars, rVars, etc. Share a context or not?
 structure Context where
   rowContext : KindContext .KRow := .empty
   typeContext : KindContext .KTy := .empty

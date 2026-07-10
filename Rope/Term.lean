@@ -9,6 +9,7 @@ namespace Term
 
 open Label Kind
 
+-- These represent "terms" of kinds other than "Term". i.e. Ty, Row, Label, K -> K 
 inductive Term : Type where
   | RVar : (name : String) -> Term
   | TVar : (name : String) -> Term

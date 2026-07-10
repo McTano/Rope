@@ -13,10 +13,14 @@ open Label
 mutual
 inductive WF_Row : (inner: Pre.Row) -> Prop where
   | empty : WF_Row .empty
+  -- rVars bound at the top level can be treated as free, but they will need to be bound for polymorphic functions
   | rVar : WF_Row (.rVar s)
   | extend : WF_Row r -> r.lack l -> (WF_Ty t) -> WF_Row (.extend r l t)
 
+-- TODO Binders for type and row variables. I think both should be defined in Ty.
 inductive WF_Ty : (inner: Pre.Ty) -> Prop where
+  -- Unit type?
+  -- For now, all TVars are free and double as atomic types and provide a base case for WF_Ty,
   | TVar : WF_Ty (.TVar s)
   | TFun : WF_Ty arg -> WF_Ty ret -> WF_Ty (.TFun (arg: Pre.Ty) (ret: Pre.Ty))
   | Singleton : WF_Ty (.Singleton l)
