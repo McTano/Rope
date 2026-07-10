@@ -8,6 +8,7 @@ namespace Pre
 
 open Label
 
+-- TODO add Preds 
 mutual
 inductive Row : Type where
   | empty : Row -- (Identity for Concat)
@@ -20,6 +21,7 @@ inductive Ty : Type where
   | Singleton : Label -> Ty
   | Pi : Row -> Ty
   | Sigma : Row -> Ty
+  -- | Qual : Pred -> Ty -> Ty
 end
 
 def Row.type_at (r: Row) (l: Label) : Option Ty :=

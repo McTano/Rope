@@ -8,6 +8,7 @@ namespace WF
 
 open Label
 
+-- TODO add WF_Pred
 -- Interdefined Well-formedness rules for Pre.Row and Pre.Ty
 mutual
 inductive WF_Row : (inner: Pre.Row) -> Prop where
@@ -21,6 +22,7 @@ inductive WF_Ty : (inner: Pre.Ty) -> Prop where
   | Singleton : WF_Ty (.Singleton l)
   | Pi : WF_Row r -> WF_Ty (.Pi r)
   | Sigma : WF_Row r -> WF_Ty (.Sigma r)
+  -- | Qual : (p: Pre.Pred) -> WF_Pred p -> (t: Ty) -> WF_Ty t -> WF_Ty (Qual p t)
 end
 
 theorem WF.unique_labels {r : Pre.Row} (wf : WF_Row r) : r.unique_labels :=
@@ -31,6 +33,8 @@ theorem WF.unique_labels {r : Pre.Row} (wf : WF_Row r) : r.unique_labels :=
 
 -- WF.Row bundles Pre.Row with a well-formedness invariant
 -- TODO See if I can refactor this to make reasoning over these less awkward.
+  -- Is there anything else I can do to reduce friction when inducting over the inner row?
+  -- Would defining a custom a custom induction principle or well-foundedness measure help
 structure Row : Type where
   inner : Pre.Row
   wf : WF_Row inner
@@ -56,6 +60,7 @@ def Row.concrete : Row -> Prop
 @[match_pattern]
 def Row.empty : Row := ⟨.empty, .empty⟩
 
+-- TODO I keep getting inaccessible pattern errors when trying to match on this. What makes this pattern different from WF.Ty.TFun, which works fine?
 @[match_pattern]
 def Row.extend (r: Row) (l : Label) (t : Ty) (h: r.lack l) : Row  :=
     ⟨Pre.Row.extend r.inner l t.inner, WF_Row.extend r.wf h t.wf⟩
@@ -112,17 +117,6 @@ theorem Row.type_at_is_some {r : Row} {l: Label} (h : r.has_label l) : (Option.i
     match inner with
     | .empty => by contradiction
     | .extend r' l' t' =>
-      -- match h with
-      -- | @Row.has_label.first _ _ _ _  => by
-      --   simp [type_at]
-      -- | @Row.has_label.extend r' l1' l2' t h_lack has_l =>
-      --   dite (l1' = l2')
-      --   (λ h => by
-      --     simp [Row.type_at,h]
-      --     )
-      --   (λ h => by
-      --     simp [Row.type_at, h]
-      --     apply Row.type_at_is_some has_l)
         by
           by_cases (l = l')
           case _ h_pos => simp [type_at, h_pos]
@@ -133,7 +127,6 @@ theorem Row.type_at_is_some {r : Row} {l: Label} (h : r.has_label l) : (Option.i
             case extend h =>
               apply Row.type_at_is_some
               simp [has_label,h]
-          -- apply Row.type_at_is_some
 
 def Row.type_at! (r: Row) (l: Label) (has_l : has_label r l) : Ty :=
   (r.type_at l).get (Row.type_at_is_some has_l)
@@ -142,6 +135,9 @@ theorem lacks_extend_lacks {r: Pre.Row} {l1 l2: Label} {t: Pre.Ty} (h_lack: Pre.
   match h_lack with
   | .extend h' _ => h'
 
+-- TODO Add Preds
+-- Well-formed rows are equivalent iff they are equal up to reordering of fields.
+-- Equivalence under a context/substitution will be defined later.
 mutual
 inductive Row.le : Row -> Row -> Prop where
   | empty {r : Row} : Row.le .empty r
@@ -150,6 +146,7 @@ inductive Row.le : Row -> Row -> Prop where
   | extend2 {a b : Row} {l : Label} {ta tb : Ty} :
     Row.le a b -> (a_lack : a.lack l) -> (b_lack : b.lack l) -> Ty.Equiv ta tb -> Row.le (@Row.extend a l ta a_lack) (@.extend b l tb b_lack)
 
+-- Types are equivalent iff they are equal up to equivalence of in all subtree
 inductive Ty.Equiv : Ty  -> Ty  -> Prop where
   | TVar : Ty.Equiv (Ty.TVar s) (Ty.TVar s)
   | Singleton : Ty.Equiv (Ty.Singleton l) (Ty.Singleton l)
@@ -161,6 +158,7 @@ end
 instance : LE Row where
   le := Row.le
 
+-- Rows are equivalent iff they are LE each other
 def Row.Equiv (a b : WF.Row) : Prop := a ≤ b ∧ b ≤ a
 
 -- TODO Ideas for deciding le and equiv

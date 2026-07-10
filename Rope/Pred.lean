@@ -9,7 +9,7 @@ public import Rope.Basic
 
 namespace Pred
 
-
+-- TODO This should almost certainly be mutually inductive with Row and Pred
 -- This should (maybe?) bundle evidence eventually
 inductive Pred : Type where
   | Contain (x: Row) (y: Row) : Pred
