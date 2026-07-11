@@ -22,11 +22,16 @@ inductive WF_Ty : (inner: Pre.Ty) -> Prop where
   -- Unit type?
   -- For now, all TVars are free and double as atomic types and provide a base case for WF_Ty,
   | TVar : WF_Ty (.TVar s)
-  | TFun : WF_Ty arg -> WF_Ty ret -> WF_Ty (.TFun (arg: Pre.Ty) (ret: Pre.Ty))
+  | TFun : WF_Ty arg -> WF_Ty ret -> WF_Ty (.TFun arg ret)
   | Singleton : WF_Ty (.Singleton l)
   | Pi : WF_Row r -> WF_Ty (.Pi r)
   | Sigma : WF_Row r -> WF_Ty (.Sigma r)
-  -- | Qual : (p: Pre.Pred) -> WF_Pred p -> (t: Ty) -> WF_Ty t -> WF_Ty (Qual p t)
+  | Qual : WF_Pred p -> WF_Ty t -> WF_Ty (.Qual p t)
+
+inductive WF_Pred : (inner :Pre.Pred) -> Prop where
+  | Contain : WF_Row x -> WF_Row y -> WF_Pred (.Contain x y)
+  | Combine : WF_Row x -> WF_Row y -> WF_Row z -> WF_Pred (.Combine x y z)
+  | TyEq : WF_Ty t1 -> WF_Ty t2 -> WF_Pred (.TyEq t1 t2)
 end
 
 theorem WF.unique_labels {r : Pre.Row} (wf : WF_Row r) : r.unique_labels :=
@@ -47,6 +52,10 @@ structure Ty : Type where
   inner : Pre.Ty
   wf : WF_Ty inner
 
+structure Pred : Type where
+  inner : Pre.Pred
+  wf : WF_Pred inner
+
 
 def Row.unique_labels : Row -> Prop
   | .mk inner _ => inner.unique_labels
@@ -64,14 +73,14 @@ def Row.concrete : Row -> Prop
 @[match_pattern]
 def Row.empty : Row := ⟨.empty, .empty⟩
 
+@[match_pattern]
+def Row.rVar (name : String) : Row :=
+  ⟨.rVar name, .rVar⟩
+
 -- TODO I keep getting inaccessible pattern errors when trying to match on this. What makes this pattern different from WF.Ty.TFun, which works fine?
 @[match_pattern]
 def Row.extend (r: Row) (l : Label) (t : Ty) (h: r.lack l) : Row  :=
     ⟨Pre.Row.extend r.inner l t.inner, WF_Row.extend r.wf h t.wf⟩
-
-@[match_pattern]
-def Row.rVar (name : String) : Row :=
-  ⟨.rVar name, .rVar⟩
 
 @[match_pattern]
 def Ty.TVar (s : String) : Ty :=
@@ -83,24 +92,41 @@ def Ty.TFun (t1 t2 : Ty) : Ty :=
 
 @[match_pattern]
 def Ty.Singleton (l : Label) : Ty :=
-  {
-    inner := Pre.Ty.Singleton l,
-    wf := WF_Ty.Singleton
-  }
+  ⟨
+    Pre.Ty.Singleton l,
+    WF_Ty.Singleton
+  ⟩
 
 @[match_pattern]
 def Ty.Pi (r : Row) : Ty :=
-  {
-    inner := Pre.Ty.Pi r.inner,
-    wf := WF_Ty.Pi r.wf
-  }
+  ⟨
+    Pre.Ty.Pi r.inner,
+    WF_Ty.Pi r.wf
+  ⟩
 
 @[match_pattern]
 def Ty.Sigma (r : Row) : Ty :=
-  {
-    inner := Pre.Ty.Sigma r.inner,
-    wf := WF_Ty.Sigma r.wf
-  }
+  ⟨
+    Pre.Ty.Sigma r.inner,
+    WF_Ty.Sigma r.wf
+  ⟩
+
+@[match_pattern]
+def Ty.Qual (p : Pred) (t : Ty) : Ty :=
+  ⟨.Qual p.inner t.inner, WF_Ty.Qual p.wf t.wf⟩
+
+@[match_pattern]
+def Pred.Contain (x y : Row) : Pred :=
+  ⟨Pre.Pred.Contain x.inner y.inner, WF_Pred.Contain x.wf y.wf⟩
+
+@[match_pattern]
+def Pred.Combine (x y z : Row) : Pred :=
+  ⟨.Combine x.inner y.inner z.inner, WF_Pred.Combine x.wf y.wf z.wf⟩
+
+@[match_pattern]
+def Pred.TyEq (t1 t2 : Ty) : Pred :=
+  ⟨.TyEq t1.inner t2.inner, WF_Pred.TyEq t1.wf t2.wf⟩
+
 
 def Row.has_label (r : Row) (l : Label): Prop :=
   r.inner.has_label l
@@ -157,6 +183,18 @@ inductive Ty.Equiv : Ty  -> Ty  -> Prop where
   | Pi : a.le b -> b.le a -> Ty.Equiv (Ty.Pi a) (Ty.Pi b)
   | Sigma : a.le b -> b.le a -> Ty.Equiv (Ty.Sigma a) (Ty.Sigma b)
   | TFun : Ty.Equiv a1 a2 -> Ty.Equiv r1 r2 -> Ty.Equiv (Ty.TFun a1 r1) (Ty.TFun a2 r2)
+  | Qual : Pred.Equiv p1 p2 -> Ty.Equiv t1 t2 -> Ty.Equiv (.Qual p1 t1) (.Qual p2 t2)
+
+inductive Pred.Equiv : Pred -> Pred -> Prop where
+  | Contain {x1 x2 y1 y2 : Row} : Row.le x1 x2 -> Row.le x2 x1 -> Row.le y1 y2 -> Row.le y2 y1 -> (Pred.Contain x1 y1).Equiv (Pred.Contain x2 y2)
+    -- Garrett-style 3-place concatenation predicate
+    -- x + y ~ z
+  | Combine {x1 x2 y1 y2 z1 z2: Row} :
+    Row.le x1 x2 -> Row.le x2 x1 -> 
+    Row.le y1 y2 -> Row.le y2 y1 -> 
+    Row.le z1 z2 -> Row.le z2 z1 ->
+    Pred.Equiv (.Combine x1 y1 z1) (.Combine x2 y2 z2)
+  | TyEq {a1 a2 b1 b2 : Ty} : (Ty.Equiv a1 a2) -> (Ty.Equiv b1 b2) ->  Pred.Equiv (.TyEq a1 b1) (.TyEq a2 b2)
 end
 
 instance : LE Row where
@@ -239,34 +277,36 @@ theorem Row.le.refl : ∀ {x : Row}, x ≤ x
   | Row.empty => .empty
   | .rVar _ => .rVar
   | ⟨Pre.Row.extend r l t, .extend wfr r_lack wft⟩ => by
-    apply @Row.le.extend2 ⟨r,wfr⟩ ⟨r,wfr⟩ l ⟨t, wft⟩ ⟨t, wft⟩ .refl r_lack r_lack (.refl _)
+    apply @Row.le.extend2 ⟨r,wfr⟩ ⟨r,wfr⟩ l ⟨t, wft⟩ ⟨t, wft⟩ .refl r_lack r_lack .refl
 
+theorem Ty.Equiv.refl : ∀ {x : Ty}, Ty.Equiv x x
+| .TVar _ => .TVar
+| .Singleton _ => .Singleton
+| ⟨.TFun arg ret, WF_Ty.TFun wf_a wf_r⟩ =>
+  @Ty.Equiv.TFun ⟨arg,wf_a⟩ ⟨arg,wf_a⟩ ⟨ret, wf_r⟩ ⟨ret, wf_r⟩ .refl .refl
+| ⟨.Pi r, WF_Ty.Pi wf_r⟩ =>
+  @Ty.Equiv.Pi ⟨r, wf_r⟩ ⟨r, wf_r⟩ .refl .refl
+| ⟨.Sigma r, WF_Ty.Sigma wf_r⟩ =>
+  @Ty.Equiv.Sigma ⟨r, wf_r⟩ ⟨r, wf_r⟩ .refl .refl
+| ⟨.Qual p t, .Qual wf_p wf_t⟩ => @Ty.Equiv.Qual ⟨p, wf_p⟩ ⟨p, wf_p⟩ ⟨t, wf_t⟩ ⟨t, wf_t⟩ .refl .refl
 
-theorem Ty.Equiv.refl : ∀ x : Ty, Ty.Equiv x x :=
-  λ x =>
-      match x with
-      | .TVar _ => .TVar
-      | .Singleton _ => .Singleton
-      | ⟨.TFun arg ret, WF_Ty.TFun wf_a wf_r⟩ =>
-        @Ty.Equiv.TFun ⟨arg,wf_a⟩ ⟨arg,wf_a⟩ ⟨ret, wf_r⟩ ⟨ret, wf_r⟩ (.refl _) (.refl _)
-      | ⟨.Pi r, WF_Ty.Pi wf_r⟩ =>
-        @Ty.Equiv.Pi ⟨r, wf_r⟩ ⟨r, wf_r⟩ .refl .refl
-      | ⟨.Sigma r, WF_Ty.Sigma wf_r⟩ =>
-        @Ty.Equiv.Sigma ⟨r, wf_r⟩ ⟨r, wf_r⟩ .refl .refl
+theorem Pred.Equiv.refl : ∀ {p : Pred}, Pred.Equiv p p
+    | ⟨.Contain x y,.Contain wf_x wf_y⟩ => @Pred.Equiv.Contain ⟨x, wf_x⟩ ⟨x, wf_x⟩ ⟨y, wf_y⟩ ⟨y, wf_y⟩ .refl .refl .refl .refl
+    | ⟨.Combine x y z, .Combine wf_x wf_y wf_z⟩ =>
+      @Pred.Equiv.Combine ⟨x, wf_x⟩ ⟨x, wf_x⟩ ⟨y, wf_y⟩ ⟨y, wf_y⟩ ⟨z, wf_z⟩ ⟨z, wf_z⟩ .refl .refl .refl .refl .refl .refl
+    | ⟨.TyEq t1 t2, .TyEq wf_t1 wf_t2⟩ => @Pred.Equiv.TyEq ⟨t1, wf_t1⟩ ⟨t1, wf_t1⟩ ⟨t2, wf_t2⟩ ⟨t2, wf_t2⟩ .refl .refl
 end
 
 
-theorem Row.Equiv.refl : ∀ (r: Row), r.Equiv r :=
-  λ _ => (And.intro
-          .refl
-          .refl)
+theorem Row.Equiv.refl : ∀ {r: Row}, r.Equiv r :=
+  (.intro .refl .refl)
 
 theorem Row.Equiv.symm : ∀ {x y : Row}, x.Equiv y → y.Equiv x :=
   λ h =>
     match h with
     | (And.intro l r) => (And.intro r l)
 
-
+mutual
 theorem Ty.Equiv.symm : ∀ {x y : Ty}, x.Equiv y → y.Equiv x :=
   λ h =>
     match h with
@@ -275,6 +315,15 @@ theorem Ty.Equiv.symm : ∀ {x y : Ty}, x.Equiv y → y.Equiv x :=
     | .TFun h1 h2 => .TFun (Ty.Equiv.symm h1) (Ty.Equiv.symm h2)
     | .Pi hl hr => .Pi hr hl
     | .Sigma hl hr => .Sigma hr hl
+    | .Qual h1 h2 => .Qual (Pred.Equiv.symm h1) (Ty.Equiv.symm h2)
+
+theorem Pred.Equiv.symm : ∀ {p q : Pred}, p.Equiv q → q.Equiv p :=
+  λ h =>
+    match h with
+    | .Contain a b c d => .Contain b a d c
+    | .Combine a b c d e f => .Combine b a d c f e
+    | .TyEq a b => .TyEq a.symm b.symm
+end
 
 theorem Row.le.extend_le {a b : Pre.Row} {wfa : WF_Row a} {wfb : WF_Row b} {l : Label} {t : Pre.Ty} {wft : WF_Ty t} {a_lack : a.lack l} (h : Row.mk (a.extend l t) (wfa.extend a_lack wft) ≤ ⟨b,wfb⟩) : Row.mk a wfa ≤ ⟨b,wfb⟩ :=
   by
@@ -313,7 +362,6 @@ theorem Row.le.trans {a b c : Pre.Row} {wfa : WF_Row a} {wfb : WF_Row b} {wfc : 
           apply Row.le.trans a'_le_b' b'_le_c'
         apply @Row.le.extendR _ ⟨c',wfc'⟩ l' _ _ c_lack_l'
         apply @Row.le.trans _ _ _ _ _ _ lem1 b_le_c'
-  termination_by (sizeOf b, sizeOf c)
 
 theorem Ty.Equiv.trans {x y z : Pre.Ty} {wfx : WF_Ty x} {wfy : WF_Ty y} {wfz : WF_Ty z} :
   (Ty.mk x wfx).Equiv (Ty.mk y wfy) → (Ty.mk y wfy).Equiv (Ty.mk z wfz) → (Ty.mk x wfx).Equiv (Ty.mk z wfz) :=
@@ -331,9 +379,8 @@ theorem Ty.Equiv.trans {x y z : Pre.Ty} {wfx : WF_Ty x} {wfy : WF_Ty y} {wfz : W
       have h1_symm := h1.symm
       have h2_symm := h2.symm
       match h1, h2 with
-      | @Ty.Equiv.Pi _ ⟨b', wfb'⟩ h_xy h_yx, Ty.Equiv.Pi h_yz h_zy =>
-        by
-          apply Ty.Equiv.Pi
+      | @Ty.Equiv.Pi _ ⟨b', wfb'⟩ h_xy h_yx, Ty.Equiv.Pi h_yz h_zy
+          => Ty.Equiv.Pi
             (Row.le.trans h_xy h_yz)
             (Row.le.trans h_zy h_yx)
     | .Sigma _, _, _ =>
@@ -342,7 +389,45 @@ theorem Ty.Equiv.trans {x y z : Pre.Ty} {wfx : WF_Ty x} {wfy : WF_Ty y} {wfz : W
         => Ty.Equiv.Sigma 
           (Row.le.trans h_xy h_yz)
           (Row.le.trans h_zy h_yx)
-termination_by (sizeOf y, sizeOf z)
+    | .Qual _ _, _, _ =>
+      match h1, h2 with
+      | @Ty.Equiv.Qual ⟨p1,_⟩ ⟨p2, _⟩ ⟨t1,_⟩ ⟨t2, _⟩ h_pxy h_txy, Ty.Equiv.Qual h_pyz h_tyz
+        => Ty.Equiv.Qual
+          (Pred.Equiv.trans h_pxy h_pyz)
+          (Ty.Equiv.trans h_txy h_tyz)
+
+theorem Pred.Equiv.trans {x y z : Pre.Pred} {wf_x : WF_Pred x} {wf_y : WF_Pred y} {wf_z : WF_Pred z} :
+  (Pred.mk x wf_x).Equiv (Pred.mk y wf_y) → (Pred.mk y wf_y).Equiv (Pred.mk z wf_z) → (Pred.mk x wf_x).Equiv (Pred.mk z wf_z)
+:=
+  λ h1 h2 =>
+    match y with
+    | .Contain _ _ =>
+      match h1, h2 with
+      | @Pred.Equiv.Contain ⟨_, _⟩ ⟨_, _⟩ ⟨_, _⟩ ⟨_, _⟩ ha_xy ha_yx hb_xy hb_yx,
+         Pred.Equiv.Contain ha_yz ha_zy hb_yz hb_zy =>
+          .Contain
+            (Row.le.trans ha_xy ha_yz)
+            (Row.le.trans ha_zy ha_yx)
+            (Row.le.trans hb_xy hb_yz)
+            (Row.le.trans hb_zy hb_yx)
+    | .Combine _ _ _ =>
+      match h1, h2 with
+      | @Pred.Equiv.Combine ⟨_, _⟩ ⟨_, _⟩ ⟨_, _⟩ ⟨_, _⟩ ⟨_, _⟩ ⟨_, _⟩ ha_xy ha_yx hb_xy hb_yx hc_xy hc_yx,
+         Pred.Equiv.Combine ha_yz ha_zy hb_yz hb_zy hc_yz hc_zy =>
+          .Combine
+            (Row.le.trans ha_xy ha_yz)
+            (Row.le.trans ha_zy ha_yx)
+            (Row.le.trans hb_xy hb_yz)
+            (Row.le.trans hb_zy hb_yx)
+            (Row.le.trans hc_xy hc_yz)
+            (Row.le.trans hc_zy hc_yx)
+    | .TyEq _ _ =>
+      match h1, h2 with
+      | @Pred.Equiv.TyEq _ ⟨_,_⟩ _ ⟨_,_⟩ ha_xy hb_xy,
+         Pred.Equiv.TyEq ha_yz hb_yz =>
+          .TyEq
+            (Ty.Equiv.trans ha_xy ha_yz)
+            (Ty.Equiv.trans hb_xy hb_yz)
 end
 
 
@@ -356,8 +441,12 @@ instance : Std.IsPreorder Row := ⟨λ _ => Row.le.refl, λ _ _ _ => Row.le.tran
 -- Equivalence of rows with respect to a context or substitution will be defined over quotients of well-formed rows and types
 instance Ty.instSetoid : Setoid Ty where
   r := Ty.Equiv
-  iseqv := ⟨.refl, .symm, .trans⟩
+  iseqv := ⟨λ _ => .refl, .symm, .trans⟩
 
 instance Row.instSetoid : Setoid Row where
   r := Row.Equiv
-  iseqv := ⟨.refl, .symm, .trans⟩
+  iseqv := ⟨λ _ => .refl, .symm, .trans⟩
+
+instance Pred.instSetoid : Setoid Pred where
+  r := Pred.Equiv
+  iseqv := ⟨λ _ => .refl, .symm, .trans⟩

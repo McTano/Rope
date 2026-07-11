@@ -21,7 +21,17 @@ inductive Ty : Type where
   | Singleton : Label -> Ty
   | Pi : Row -> Ty
   | Sigma : Row -> Ty
-  -- | Qual : Pred -> Ty -> Ty
+  | Qual : Pred -> Ty -> Ty
+
+inductive Pred : Type where
+  | Contain (x: Row) (y: Row) : Pred
+    -- Garrett-style 3-place concatenation predicate
+    -- x + y ~ z
+  | Combine (x: Row) (y: Row) (z: Row) : Pred
+  -- Eq can defined in terms of Combine, at the cost of always introducing another type variable
+  -- | Eq (x: Row) (y: Row) : Pred
+  -- May want separate disjointness or lack constraints.
+  | TyEq (t1 t2 : Ty) : Pred
 end
 
 def Row.type_at (r: Row) (l: Label) : Option Ty :=

@@ -11,6 +11,8 @@ def Row : Type := Quotient WF.Row.instSetoid
 
 def Ty : Type := Quotient WF.Ty.instSetoid
 
+def Pred : Type := Quotient WF.Pred.instSetoid
+
 -- instance : LE Row where
 --   le :=
 --     Quotient.lift₂ WF.Row.le <| by
