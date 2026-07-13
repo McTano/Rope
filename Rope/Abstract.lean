@@ -34,11 +34,21 @@ variable (a b c d : Row)
 
 #check a + b ~ c
 
+axiom disjoint.implies_def : ∀ {a b : Row}, a ⊥ b -> Σ c, PLift (a + b ~ c)
+
+-- Might be better off including the well-definedness constraint as a precondition to theorems, a la denominator ≠ 0?
+noncomputable
+def concat (a b : Row) : {_: a ⊥ b} -> Row :=
+  λ {h} => (h.implies_def).fst
+
+infixl:90 " ++ " => concat
+
+notation:90 a:100 " ++ " b:100 "(" h ")" => @concat a b h
+
 -- Axioms
 -- The axioms given here define simple row theory as a
 -- *Partial Commutative Monoid*
 -- https://ncatlab.org/nlab/show/effect+algebra#definition
-axiom disjoint.implies_def : ∀ {a b : Row}, a ⊥ b -> Σ c, PLift (a + b ~ c)
 @[simp]
 axiom concat_to.def_implies_disjoint : ∀ {a b c : Row}, (a + b ~ c) -> a ⊥ b
 
@@ -47,14 +57,59 @@ axiom disjoint.symm : ∀ {a : Row}, a ⊥ b -> b ⊥ a
 
 axiom concat_to.zero : ∀ {a : Row}, {} + a ~ a
 axiom concat_to.symm : ∀ {a b : Row}, a + b ~ c -> b + a ~ c
+-- helpers for associativity are necessary to access the disjointness proofs implied by the earlier arguments
+@[simp]
+axiom concat_to.assoc_helper1 : forall {x y z : Row},
+  (hyz: y ⊥ z) ->
+  (hxyz: x ⊥ (@concat y z hyz))
+  -> x ⊥ y
+
+@[simp]
+axiom concat_to.assoc_helper2 : forall {x y z : Row},
+  (hxy: x ⊥ y) ->
+  ((@concat x y hxy) ⊥ z)
+
+-- proof irrelevance of x ⊥ y for cat
+@[simp, grind =]
+theorem concat.unique : forall {x y : Row} {h h' : x ⊥ y},
+  @concat x y h = @concat x y h' := by
+  intro x y h h'
+  rfl
+
 -- Associativity is rephrased from the nlab version
 -- y⊥z and x⊥(y∨z) implies x⊥y and (x∨y)⊥z and x∨(y∨z)=(x∨y)∨z.
--- TODO define a version of this over the concat function
-axiom concat_to.associativity : forall {x y z yz xy xyz: Row},
-  y + z ~ yz -> x + yz ~ xyz
-             -> x ⊥ y ∧
-               (x + y ~ xy ->
-                        xy ⊥ z ∧ xy + z ~ xyz)
+@[simp]
+axiom concat_to.assoc : forall {x y z : Row},
+  (hyz: y ⊥ z) ->
+  (hxyz: x ⊥ (@concat y z hyz)) ->
+  (x + (@concat y z hyz) ~ (@concat (@concat x y (assoc_helper1 _ hxyz)) z (assoc_helper2 (assoc_helper1 _ hxyz))))
+
+-- Associativity is rephrased from the nlab version
+-- y⊥z and x⊥(y∨z) implies x⊥y and (x∨y)⊥z and x∨(y∨z)=(x∨y)∨z.
+theorem concat.ah1 : forall {x y z : Row},
+  {hyz: y ⊥ z} -> 
+  x ⊥ (@concat y z hyz) ->
+  (x ⊥ y)
+  := by
+    sorry
+
+theorem concat.ah2 : forall {x y z : Row},
+  (hyz: y ⊥ z) -> 
+  (hxyz: x ⊥ (@concat y z hyz)) ->
+  (@concat x y (ah1 hxyz)) ⊥ z
+  := by sorry
+  
+-- x∨(y∨z)=(x∨y)∨z
+theorem concat.assoc : forall {x y z yz xy xyz : Row},
+  (hyz: y ⊥ z) ->
+  (hxyz: x ⊥ (@concat y z _)) ->
+  (@concat x
+           (@concat y z _)
+           hxyz) = (@concat
+                          (@concat x y (ah1 hxyz)) z
+                      (concat.ah2 hyz hxyz))
+   := by sorry
+
 
 theorem zero_right : ∀ {a : Row}, a ⊥ {} := disjoint.zero.symm
 
@@ -66,14 +121,7 @@ axiom concat_to.unique :
 axiom concat_to.idr : ∀ {a : Row}, a + {} ~ a
 -- axiom concat_to.assoc :  ∀ {a b c: Row}, (h: a ⊥ b) -> x ⊥ (@concat a b h)
 
--- Might be better off including the well-definedness constraint as a precondition to theorems, a la denominator ≠ 0?
-noncomputable
-def concat (a b : Row) : {_: a ⊥ b} -> Row :=
-  λ {h} => (h.implies_def).fst
-
-infixl:90 " ++ " => concat
-
--- It's annoying that I can't say (a ++ b), even when I know that a ⊥ b is disjoint.
+-- It's annoying that I can't say (a ++ b) or synthesize h when it appears as a previous argument
 theorem concat.denotation : ∀ {a b: Row}, (h : a ⊥ b) -> ∃ c, ((a + b ~ c) ∧ (@concat a b h) = c) :=
   λ h =>
     ⟨h.implies_def.fst, And.intro h.implies_def.snd.down rfl⟩
