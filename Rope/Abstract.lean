@@ -21,152 +21,150 @@ notation "{}" => empty
 
 opaque disjoint : Row -> Row -> Prop
 
-infixl:90 " ⊥ " => disjoint
-
-
-
--- redefine as 3-place Prop pred?
-opaque concat_to : Row -> Row -> Row -> Prop
-
-notation:90 a:100 " + " b:100 " ~ " c:100 => concat_to a b c
+infix:90 " ⊥ " => disjoint
 
 variable (a b c d : Row)
 
-#check a + b ~ c
-
-axiom disjoint.implies_def : ∀ {a b : Row}, a ⊥ b -> Σ c, PLift (a + b ~ c)
 
 -- Might be better off including the well-definedness constraint as a precondition to theorems, a la denominator ≠ 0?
 noncomputable
-def concat (a b : Row) : {_: a ⊥ b} -> Row :=
-  λ {h} => (h.implies_def).fst
+opaque concat (a b : Row) : Row
 
-infixl:90 " ++ " => concat
+infixl:110 " ++ " => concat
 
-notation:90 a:100 " ++ " b:100 "(" h ")" => @concat a b h
+axiom disjoint.implies_def : ∀ {a b : Row}, {_: a ⊥ b} -> Σ c, PLift (a ++ b = c)
 
 -- Axioms
 -- The axioms given here define simple row theory as a
 -- *Partial Commutative Monoid*
 -- https://ncatlab.org/nlab/show/effect+algebra#definition
-@[simp]
-axiom concat_to.def_implies_disjoint : ∀ {a b c : Row}, (a + b ~ c) -> a ⊥ b
 
+@[simp]
 axiom disjoint.zero : ∀ {a : Row}, {} ⊥ a
-axiom disjoint.symm : ∀ {a : Row}, a ⊥ b -> b ⊥ a
+@[symm]
+axiom disjoint.symm : ∀ {a b: Row}, a ⊥ b -> b ⊥ a
 
-axiom concat_to.zero : ∀ {a : Row}, {} + a ~ a
-axiom concat_to.symm : ∀ {a b : Row}, a + b ~ c -> b + a ~ c
--- helpers for associativity are necessary to access the disjointness proofs implied by the earlier arguments
-@[simp]
-axiom concat_to.assoc_helper1 : forall {x y z : Row},
-  (hyz: y ⊥ z) ->
-  (hxyz: x ⊥ (@concat y z hyz))
-  -> x ⊥ y
-
-@[simp]
-axiom concat_to.assoc_helper2 : forall {x y z : Row},
-  (hxy: x ⊥ y) ->
-  ((@concat x y hxy) ⊥ z)
-
--- proof irrelevance of x ⊥ y for cat
-@[simp, grind =]
-theorem concat.unique : forall {x y : Row} {h h' : x ⊥ y},
-  @concat x y h = @concat x y h' := by
-  intro x y h h'
-  rfl
+axiom concat.zero : ∀ {a : Row}, {} ++ a = a
+axiom concat.symm : ∀ {a b : Row}, {_:a ⊥ b} -> a ++ b = b ++ a
 
 -- Associativity is rephrased from the nlab version
 -- y⊥z and x⊥(y∨z) implies x⊥y and (x∨y)⊥z and x∨(y∨z)=(x∨y)∨z.
+axiom disjoint.assoc : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> (x ++ y) ⊥ z
+axiom disjoint.elim : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> x ⊥ y
+axiom concat.assoc : ∀ {x y z : Row}, y ⊥ z -> x ++ (y ++ z) = (x ++ y) ++ z
+
+theorem disjoint.elim' : ∀ {x y z : Row}, x ⊥ y -> (x ++ y) ⊥ z -> y ⊥ z := by
+  intro x y z h1 h2
+  replace h2 := symm h2
+  rw [concat.symm] at h2
+  replace h1 := symm h1
+  replace h2 := elim h1 h2
+  apply h2.symm
+  apply h1
+
+theorem disjoint.elim_inner : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> x ⊥ z := by
+  intro x y z h1 h2
+  replace h1 := disjoint.symm h1
+  rw [concat.symm] at h2
+  apply disjoint.elim h1 h2
+  apply h1.symm
+
+theorem disjoint.elim_inner' : ∀ {x y z : Row}, x ⊥ y -> (x ++ y) ⊥ z -> y ⊥ z := by
+  intro x y z h1 h2
+  replace h1 := disjoint.symm h1
+  apply disjoint.elim' h1.symm h2
+
+
+theorem disjoint.assoc' : ∀ {x y z : Row}, x ⊥ y -> (x ++ y) ⊥ z -> x ⊥ (y ++ z) := by
+  intro x y z h1 h2
+  have lem1 : y ⊥ z := by
+    apply disjoint.elim_inner' h1 h2
+  have lem2 : (z ++ y) ⊥ x := by
+    rw [@concat.symm _ _ h1] at h2
+    replace h2 := symm h2
+    replace h1 := symm h1
+    apply (disjoint.assoc h1 h2)
+  replace lem2 := symm lem2
+  rw [@concat.symm _ _ lem1.symm] at lem2
+  exact lem2
+
+
+-- Adding these two axioms makes SRT a
+-- *Generalized Effect Algebra"
+axiom cancellation : ∀ {a b c},
+  a ⊥ b -> a ⊥ c -> (a ++ b) = (a ++ c) -> b = c
+axiom positivity : ∀ a b, a ⊥ b -> (a ++ b) = {} -> a = {} ∧ b = {}
+
+theorem positivityl : ∀ {a b}, a ⊥ b -> (a ++ b) = {} -> a = {} :=
+  λ h1 h2 => (positivity _ _ h1 h2).left
+
+theorem positivityr : ∀ {a b}, a ⊥ b -> (a ++ b) = {} -> b = {} :=
+  λ h1 h2 => (positivity _ _ h1 h2).right
+
+theorem positivity_a_eq_b : ∀ {a b}, a ⊥ b -> (a ++ b) = {} -> a = b :=
+  λ h1 h2 => by
+    rw [(positivity _ _ h1 h2).left, (positivity _ _ h1 h2).right]
+    
+
 @[simp]
-axiom concat_to.assoc : forall {x y z : Row},
-  (hyz: y ⊥ z) ->
-  (hxyz: x ⊥ (@concat y z hyz)) ->
-  (x + (@concat y z hyz) ~ (@concat (@concat x y (assoc_helper1 _ hxyz)) z (assoc_helper2 (assoc_helper1 _ hxyz))))
+theorem disjoint.zero_right : ∀ {a : Row}, a ⊥ {} := disjoint.zero.symm
 
--- Associativity is rephrased from the nlab version
--- y⊥z and x⊥(y∨z) implies x⊥y and (x∨y)⊥z and x∨(y∨z)=(x∨y)∨z.
-theorem concat.ah1 : forall {x y z : Row},
-  {hyz: y ⊥ z} -> 
-  x ⊥ (@concat y z hyz) ->
-  (x ⊥ y)
-  := by
-    sorry
+@[simp]
+theorem concat.zero_right : ∀ {a : Row}, a ++ {} = a :=
+  λ {a} =>
+  by
+    rw [symm]
+    apply zero
+    apply disjoint.zero.symm
 
-theorem concat.ah2 : forall {x y z : Row},
-  (hyz: y ⊥ z) -> 
-  (hxyz: x ⊥ (@concat y z hyz)) ->
-  (@concat x y (ah1 hxyz)) ⊥ z
-  := by sorry
-  
--- x∨(y∨z)=(x∨y)∨z
-theorem concat.assoc : forall {x y z yz xy xyz : Row},
-  (hyz: y ⊥ z) ->
-  (hxyz: x ⊥ (@concat y z _)) ->
-  (@concat x
-           (@concat y z _)
-           hxyz) = (@concat
-                          (@concat x y (ah1 hxyz)) z
-                      (concat.ah2 hyz hxyz))
-   := by sorry
-
-
-theorem zero_right : ∀ {a : Row}, a ⊥ {} := disjoint.zero.symm
-
-axiom concat_to.unique :
-  a + b ~ c ∧ a + b ~ c' -> c = c'
-
--- axiom concat_to.
-
-axiom concat_to.idr : ∀ {a : Row}, a + {} ~ a
--- axiom concat_to.assoc :  ∀ {a b c: Row}, (h: a ⊥ b) -> x ⊥ (@concat a b h)
-
--- It's annoying that I can't say (a ++ b) or synthesize h when it appears as a previous argument
-theorem concat.denotation : ∀ {a b: Row}, (h : a ⊥ b) -> ∃ c, ((a + b ~ c) ∧ (@concat a b h) = c) :=
-  λ h =>
-    ⟨h.implies_def.fst, And.intro h.implies_def.snd.down rfl⟩
-
-theorem concat.rel : ∀ {a b : Row}, (h: a ⊥ b) -> (a + b ~ (@concat a b h)) := by
-  intro a b h
-  unfold concat
-  apply h.implies_def.snd.down
-
-theorem concat.denotation2 : ∀ {a b c : Row}, (h : a + b ~ c) -> (@concat a b h.def_implies_disjoint) = c :=
-  λ h => concat_to.unique _ _ _ (And.intro (concat.rel h.def_implies_disjoint) h)
+theorem concat.id_is_zero : ∀ {a b : Row}, a ⊥ b -> a ++ b = a -> b = {} :=
+  λ {a b} h1 h2 =>
+    by
+      apply @cancellation a b {} h1 disjoint.zero_right
+      rw [h2, concat.zero_right]
 
 -- Consider lifting this to Sigma type so we can access the witness
-def le (a c : Row): Prop := ∃ b, a + b ~ c
+def le (a c : Row): Prop := ∃ b, a ⊥ b ∧ (a ++ b) = c
 
 instance : LE Row where
   le := le
 
-#check {} ≤ {}
+@[refl]
+theorem le.refl : ∀ {a : Row}, a ≤ a := ⟨{}, disjoint.zero.symm, concat.zero_right⟩
 
-theorem le.refl : ∀ {a : Row}, a ≤ a := ⟨{}, .idr⟩
+theorem le.bottom : ∀ {a : Row}, {} ≤ a := ⟨_, disjoint.zero, concat.zero⟩
 
-theorem le.bottom : ∀ {a : Row}, {} ≤ a := ⟨_, .zero⟩
 theorem le.trans : ∀ {a b c : Row}, a ≤ b -> b ≤ c -> a ≤ c :=
   λ {a b c} a_b b_c =>
     match a_b, b_c with
-    | ⟨ab', hab⟩, ⟨bc', hbc⟩ => by
-      simp [(.≤.),le] at *
-      -- have lem : ab' ⊥ bc' := sorry
-      -- exists (@concat ab' bc' lem)
-      have lem_ab_disj : a ⊥ ab' := hab.def_implies_disjoint
-      have lem' : b = (@concat a ab' lem_ab_disj) := by
-        apply (concat_to.unique a ab')
-        apply And.intro hab
-        apply concat.rel
-      have lem_bc_disj : b ⊥ bc' := hbc.def_implies_disjoint
-      have lem'' : c = (@concat b bc' lem_bc_disj) := by
-        apply (concat_to.unique b bc')
-        apply And.intro hbc
-        apply concat.rel
-      rw [lem'] at hbc
-      rw [lem''] at hbc
-      sorry
-theorem le.antisymm : ∀ {a b : Row}, a ≤ b -> b ≤ a -> a = b := by sorry
+    | ⟨ab', ab_disj, hab⟩, ⟨bc', bc_disj, hbc⟩ => by
+      simp [(.≤.),le]
+      exists ab' ++ bc'
+      apply And.intro <;> rw [<-hab] at *
+      apply @disjoint.assoc' _ _ _ ab_disj bc_disj
+      rw [concat.assoc]
+      apply hbc
+      apply disjoint.elim' ab_disj bc_disj
 
+
+theorem le.antisymm : ∀ {a b : Row}, a ≤ b -> b ≤ a -> a = b :=
+  λ {a b} ha hb =>
+    match ha, hb with
+    | ⟨a',ha1, ha2⟩, ⟨b',hb1, hb2⟩ =>
+      by
+        rw [<-ha2] at hb2 hb1
+        have lem1 : a' ⊥ b' := by
+          apply disjoint.elim' ha1 hb1
+        rw [<-concat.assoc lem1] at hb2
+        have lem2 : (a' ++ b') = {} :=
+          by
+            apply concat.id_is_zero (disjoint.assoc' ha1 hb1) hb2
+        have lem3 : a' = {} :=
+          by
+            apply positivityl lem1 lem2
+        rw [lem3] at ha2
+        simp at ha2
+        exact ha2
 
 instance : Std.IsPartialOrder Row where
   le_refl := λ _ => le.refl
