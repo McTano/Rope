@@ -47,11 +47,14 @@ axiom disjoint.symm : ∀ {a b: Row}, a ⊥ b -> b ⊥ a
 axiom concat.zero : ∀ {a : Row}, {} ++ a = a
 axiom concat.symm : ∀ {a b : Row}, {_:a ⊥ b} -> a ++ b = b ++ a
 
--- Associativity is rephrased from the nlab version
+-- Associativity is rephrased from the nlab version:
 -- y⊥z and x⊥(y∨z) implies x⊥y and (x∨y)⊥z and x∨(y∨z)=(x∨y)∨z.
-axiom disjoint.assoc : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> (x ++ y) ⊥ z
-axiom disjoint.elim : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> x ⊥ y
-axiom concat.assoc : ∀ {x y z : Row}, y ⊥ z -> x ++ (y ++ z) = (x ++ y) ++ z
+axiom assoc_ax : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> x ⊥ y ∧ (x ++ y) ⊥ z ∧ x ++ (y ++ z) = (x ++ y) ++ z
+
+-- deconstructed contents of assoc_ax
+theorem disjoint.assoc : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> (x ++ y) ⊥ z := λ h1 h2 => (assoc_ax h1 h2).right.left
+theorem disjoint.elim : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> x ⊥ y := λ h1 h2 => (assoc_ax h1 h2).left
+theorem concat.assoc : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> x ++ (y ++ z) = (x ++ y) ++ z := λ h1 h2 => (assoc_ax h1 h2).right.right
 
 theorem disjoint.elim' : ∀ {x y z : Row}, x ⊥ y -> (x ++ y) ⊥ z -> y ⊥ z := by
   intro x y z h1 h2
@@ -60,7 +63,7 @@ theorem disjoint.elim' : ∀ {x y z : Row}, x ⊥ y -> (x ++ y) ⊥ z -> y ⊥ z
   replace h1 := symm h1
   replace h2 := elim h1 h2
   apply h2.symm
-  apply h1
+  trivial
 
 theorem disjoint.elim_inner : ∀ {x y z : Row}, y ⊥ z -> x ⊥ (y ++ z) -> x ⊥ z := by
   intro x y z h1 h2
@@ -91,12 +94,12 @@ theorem disjoint.assoc' : ∀ {x y z : Row}, x ⊥ y -> (x ++ y) ⊥ z -> x ⊥ 
 
 -- Adding these two axioms makes SRT a
 -- *Generalized Effect Algebra"
-axiom cancellation : ∀ {a b c},
+axiom cancellation : ∀ a b c,
   a ⊥ b -> a ⊥ c -> (a ++ b) = (a ++ c) -> b = c
 axiom positivity : ∀ a b, a ⊥ b -> (a ++ b) = {} -> a = {} ∧ b = {}
 
-theorem positivityl : ∀ {a b}, a ⊥ b -> (a ++ b) = {} -> a = {} :=
-  λ h1 h2 => (positivity _ _ h1 h2).left
+theorem positivityl : ∀ a b, a ⊥ b -> (a ++ b) = {} -> a = {} :=
+  λ _ _ h1 h2 => (positivity _ _ h1 h2).left
 
 theorem positivityr : ∀ {a b}, a ⊥ b -> (a ++ b) = {} -> b = {} :=
   λ h1 h2 => (positivity _ _ h1 h2).right
@@ -105,7 +108,6 @@ theorem positivity_a_eq_b : ∀ {a b}, a ⊥ b -> (a ++ b) = {} -> a = b :=
   λ h1 h2 => by
     rw [(positivity _ _ h1 h2).left, (positivity _ _ h1 h2).right]
     
-
 @[simp]
 theorem disjoint.zero_right : ∀ {a : Row}, a ⊥ {} := disjoint.zero.symm
 
@@ -143,8 +145,10 @@ theorem le.trans : ∀ {a b c : Row}, a ≤ b -> b ≤ c -> a ≤ c :=
       apply And.intro <;> rw [<-hab] at *
       apply @disjoint.assoc' _ _ _ ab_disj bc_disj
       rw [concat.assoc]
-      apply hbc
-      apply disjoint.elim' ab_disj bc_disj
+      trivial
+      apply disjoint.elim' <;> trivial
+      apply disjoint.assoc' ab_disj bc_disj
+
 
 
 theorem le.antisymm : ∀ {a b : Row}, a ≤ b -> b ≤ a -> a = b :=
@@ -161,12 +165,13 @@ theorem le.antisymm : ∀ {a b : Row}, a ≤ b -> b ≤ a -> a = b :=
             apply concat.id_is_zero (disjoint.assoc' ha1 hb1) hb2
         have lem3 : a' = {} :=
           by
-            apply positivityl lem1 lem2
+            apply positivityl _ _ lem1 lem2
         rw [lem3] at ha2
-        simp at ha2
-        exact ha2
+        simp_all
+        apply disjoint.assoc' ha1 hb1
 
 instance : Std.IsPartialOrder Row where
   le_refl := λ _ => le.refl
   le_antisymm := λ _ _ => le.antisymm
   le_trans := λ _ _ _ => le.trans
+
