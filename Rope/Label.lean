@@ -13,4 +13,4 @@ inductive Label.concrete : Label -> Prop where
  | literal : Label.concrete (.explicit s)
 
 -- Equality of labels is purely syntactic, explicit labels are equal if they are equal as strings, likewise for lVars
-deriving instance BEq, DecidableEq, Hashable, Ord, ReflBEq, LawfulBEq for Label
+deriving instance BEq, DecidableEq, Hashable, Ord, ReflBEq, LawfulBEq, Repr for Label
