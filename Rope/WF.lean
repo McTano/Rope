@@ -8,36 +8,34 @@ namespace WF
 
 open Label Pre
 
--- TODO add WF_Pred
 -- Interdefined Well-formedness rules for Pre.Row and Pre.Ty
 mutual
-inductive WF_Row : (inner: Pre.Row) -> Prop where
-  | empty : WF_Row .empty
-  | extend : WF_Row r -> r.lack l -> (WF_Ty t) -> WF_Row (.extend r l t)
+inductive Row.WF : (inner: Pre.Row) -> Prop where
+  | empty : Row.WF .empty
+  | extend : Row.WF r -> r.lack l -> (Ty.WF t) -> Row.WF (.extend r l t)
 
 -- TODO Binders for type and row variables. I think both should be defined in Ty.
-inductive WF_Ty : (inner: Pre.Ty) -> Prop where
+inductive Ty.WF : (inner: Pre.Ty) -> Prop where
   -- Unit type?
-  -- For now, all TVars are free and double as atomic types and provide a base case for WF_Ty,
-  | TVar : WF_Ty (.TVar s)
-  | TFun : WF_Ty arg -> WF_Ty ret -> WF_Ty (.TFun arg ret)
-  | Singleton : WF_Ty (.Singleton l)
-  | Pi : WF_Row r -> WF_Ty (.Pi r)
-  | Sigma : WF_Row r -> WF_Ty (.Sigma r)
-  | Qual : WF_Pred p -> WF_Ty t -> WF_Ty (.Qual p t)
+  -- For now, all TVars are free and double as atomic types and provide a base case for Ty.WF,
+  | TVar : Ty.WF (.TVar s)
+  | TFun : Ty.WF arg -> Ty.WF ret -> Ty.WF (.TFun arg ret)
+  | Singleton : Ty.WF (.Singleton l)
+  | Pi : Row.WF r -> Ty.WF (.Pi r)
+  | Sigma : Row.WF r -> Ty.WF (.Sigma r)
+  | Qual : Pred.WF p -> Ty.WF t -> Ty.WF (.Qual p t)
 
-inductive WF_Pred : (inner :Pre.Pred) -> Prop where
-  | Contain : WF_Row x -> WF_Row y -> WF_Pred (.Contain x y)
-  | Combine : WF_Row x -> WF_Row y -> WF_Row z -> WF_Pred (.Combine x y z)
-  | TyEq : WF_Ty t1 -> WF_Ty t2 -> WF_Pred (.TyEq t1 t2)
+inductive Pred.WF : (inner :Pre.Pred) -> Prop where
+  | Contain : Row.WF x -> Row.WF y -> Pred.WF (.Contain x y)
+  | Combine : Row.WF x -> Row.WF y -> Row.WF z -> Pred.WF (.Combine x y z)
+  | TyEq : Ty.WF t1 -> Ty.WF t2 -> Pred.WF (.TyEq t1 t2)
 end
 
-theorem WF.unique_labels {r : Pre.Row} (wf : WF_Row r) : r.unique_labels :=
+
+theorem WF.unique_labels {r : Pre.Row} (wf : Row.WF r) : r.unique_labels :=
   match wf with
   | .empty => .empty
   | .extend r_wf r_lack_l ty_wf => Pre.Row.unique_labels.extend (WF.unique_labels r_wf) r_lack_l
-
-
 
 theorem in_not_lack : In l t a -> a.lack l -> False :=
   λ h h' =>
@@ -73,7 +71,7 @@ theorem lack_inner_implies_equal (a : Pre.Row) (l l' : Label) (t t': Pre.Ty) : I
   trivial
   cases (@lack_not_in l t a h' (by trivial))
 
-theorem extend_equal_label (a : Pre.Row) (wfa : WF_Row a) (l : Label) (t t' : Pre.Ty) (h_lack : a.lack l) (h_in: In l t (Pre.Row.extend a l t')) :
+theorem extend_equal_label (a : Pre.Row) (wfa : Row.WF a) (l : Label) (t t' : Pre.Ty) (h_lack : a.lack l) (h_in: In l t (Pre.Row.extend a l t')) :
     Ty.Equiv t t' :=
   by
     have lem : ¬ In l t a := by
@@ -82,7 +80,7 @@ theorem extend_equal_label (a : Pre.Row) (wfa : WF_Row a) (l : Label) (t t' : Pr
     unhygienic cases h_in <;> cases wfa
     repeat trivial
 
-theorem equal_label_equiv_type (l : Label) (t1 t2: Pre.Ty) (r : Pre.Row) (wfr : WF_Row r)
+theorem equal_label_equiv_type (l : Label) (t1 t2: Pre.Ty) (r : Pre.Row) (wfr : Row.WF r)
   (h1 : In l t1 r) (h2 : In l t2 r) : Ty.Equiv t1 t2 :=
       match h1, h2 with
       | .first _ _ _ _ e, .first _ _ _ _ e' =>

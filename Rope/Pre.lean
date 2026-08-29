@@ -19,9 +19,9 @@ inductive Ty : Type where
   | TVar (name : String) : Ty
   | TFun (arg: Ty) (ret: Ty) : Ty
   | Singleton : Label -> Ty
-  | Pi : Pre.Row -> Ty
-  | Sigma : Pre.Row -> Ty
-  | Qual : Pre.Pred -> Ty -> Ty
+  | Pi : Row -> Ty
+  | Sigma : Row -> Ty
+  | Qual : Pred -> Ty -> Ty
 
 inductive Pred : Type where
   | Contain (x: Row) (y: Row) : Pred
@@ -37,7 +37,7 @@ end
 def Pi := Ty.Pi
 def Sigma := Ty.Sigma
 
-notation "{}" => Pre.Row.empty
+notation "{}" => Row.empty
 notation l " : " t " , " r => Row.extend r l t
 notation "@@" t => Ty.TVar t
 
@@ -121,7 +121,7 @@ theorem conc_inner : Row.concrete (a.extend l t) -> Row.concrete a :=
 --   by intro h; cases h; trivial
 
 
-theorem lacks_extend_lacks {r: Pre.Row} {l1 l2: Label} {t: Pre.Ty} (h_lack: Pre.Row.lack (r.extend l2 t) l1) : Pre.Row.lack r l1 :=
+theorem lacks_extend_lacks {r: Row} {l1 l2: Label} {t: Ty} (h_lack: Row.lack (r.extend l2 t) l1) : Row.lack r l1 :=
   match h_lack with
   | .extend h' _ => h'
 
@@ -130,33 +130,33 @@ theorem lacks_extend_lacks {r: Pre.Row} {l1 l2: Label} {t: Pre.Ty} (h_lack: Pre.
 -- Well-formed rows are equivalent iff they are equal up to reordering of fields.
 -- Equivalence under a context/substitution will be defined later.
 mutual
-inductive In : Label -> Pre.Ty -> Pre.Row -> Prop where
-  | first (l: Label) (t: Pre.Ty) (a: Pre.Row) (t' : Pre.Ty) : Ty.Equiv t t' -> In l t (.extend a l t')
-  | tail (l l' : Label) (t t': Pre.Ty) (a : Pre.Row)  : In l t a -> In l t (.extend a l' t')
-  -- | equiv (l : Label) (t t' : Pre.Ty) (te : Ty.Equiv t t') (a : Pre.Row ): In l t a -> In l t' a
+inductive In : Label -> Ty -> Row -> Prop where
+  | first (l: Label) (t: Ty) (a: Row) (t' : Ty) : Ty.Equiv t t' -> In l t (.extend a l t')
+  | tail (l l' : Label) (t t': Ty) (a : Row)  : In l t a -> In l t (.extend a l' t')
+  -- | equiv (l : Label) (t t' : Ty) (te : Ty.Equiv t t') (a : Row ): In l t a -> In l t' a
 
-inductive Row.le : Pre.Row -> Pre.Row -> Prop where
-  | empty {r : Pre.Row} : Row.le .empty r
-  | extendR {a b : Pre.Row} {l : Label} {t : Pre.Ty} : (a_le_b: Row.le a b) -> Row.le a (b.extend l t)
-  | extendL (a b: Pre.Row) (l : Label) (t : Pre.Ty) : (a_le_b: Row.le a b) -> (h_in : In l t b) -> Row.le (l : t, a) b
+inductive le : Row -> Row -> Prop where
+  | empty {r : Row} : le .empty r
+  | extendR {a b : Row} {l : Label} {t : Ty} : (a_le_b: le a b) -> le a (b.extend l t)
+  | extendL (a b: Row) (l : Label) (t : Ty) : (a_le_b: le a b) -> (h_in : In l t b) -> le (l : t, a) b
 
 -- Types are equivalent iff they are equal up to equivalence of in all subtree
-inductive Ty.Equiv : Pre.Ty  -> Pre.Ty  -> Prop where
-  | TVar : Ty.Equiv (Pre.Ty.TVar s) (Pre.Ty.TVar s)
-  | Singleton : Ty.Equiv (Pre.Ty.Singleton l) (Pre.Ty.Singleton l)
-  | Pi {a b : Pre.Row} : Row.le a b -> Row.le b a -> Ty.Equiv (.Pi a) (.Pi b)
-  | Sigma {a b : Pre.Row} : Row.le a b -> Row.le b a -> Ty.Equiv (.Sigma a) (.Sigma b)
+inductive Ty.Equiv : Ty  -> Ty  -> Prop where
+  | TVar : Ty.Equiv (Ty.TVar s) (Ty.TVar s)
+  | Singleton : Ty.Equiv (Ty.Singleton l) (Ty.Singleton l)
+  | Pi {a b : Row} : le a b -> le b a -> Ty.Equiv (.Pi a) (.Pi b)
+  | Sigma {a b : Row} : le a b -> le b a -> Ty.Equiv (.Sigma a) (.Sigma b)
   | TFun : Ty.Equiv a1 a2 -> Ty.Equiv r1 r2 -> Ty.Equiv (.TFun a1 r1) (.TFun a2 r2)
   | Qual : Pred.Equiv p1 p2 -> Ty.Equiv t1 t2 -> Ty.Equiv (.Qual p1 t1) (.Qual p2 t2)
 
-inductive Pred.Equiv : Pre.Pred -> Pre.Pred -> Prop where
-  | Contain {x1 x2 y1 y2 : Pre.Row} : Row.le x1 x2 -> Row.le x2 x1 -> Row.le y1 y2 -> Row.le y2 y1 -> Pred.Equiv (.Contain x1 y1) (.Contain x2 y2)
+inductive Pred.Equiv : Pred -> Pred -> Prop where
+  | Contain {x1 x2 y1 y2 : Row} : le x1 x2 -> le x2 x1 -> le y1 y2 -> le y2 y1 -> Pred.Equiv (.Contain x1 y1) (.Contain x2 y2)
     -- Garrett-style 3-place concatenation predicate
     -- x + y ~ z
-  | Combine {x1 x2 y1 y2 z1 z2: Pre.Row} :
-    Row.le x1 x2 -> Row.le x2 x1 ->
-    Row.le y1 y2 -> Row.le y2 y1 ->
-    Row.le z1 z2 -> Row.le z2 z1 ->
+  | Combine {x1 x2 y1 y2 z1 z2: Row} :
+    le x1 x2 -> le x2 x1 ->
+    le y1 y2 -> le y2 y1 ->
+    le z1 z2 -> le z2 z1 ->
     Pred.Equiv (.Combine x1 y1 z1) (.Combine x2 y2 z2)
   | TyEq {a1 a2 b1 b2 : Ty} : (Ty.Equiv a1 a2) -> (Ty.Equiv b1 b2) ->  Pred.Equiv (.TyEq a1 b1) (.TyEq a2 b2)
 end
@@ -164,15 +164,15 @@ end
 
 
 
--- Probably simpler version of Row.le
+-- Probably simpler version of le
 -- If we allow rVar as a case of Row, then by this definition, rVar is ≤ any row
-def Row.le' (a b : Pre.Row) := (∀ {l : Label} {t : Pre.Ty}, In l t a -> In l t b)
+def le' (a b : Row) := (∀ {l : Label} {t : Ty}, In l t a -> In l t b)
 
--- def Row.le' (a b : Row) := (∀ {l : Label} {t : Pre.Ty}, In l t a.inner -> In l t b.inner)
+-- def le' (a b : Row) := (∀ {l : Label} {t : Ty}, In l t a.inner -> In l t b.inner)
 
 @[refl]
-theorem Row.le'.refl {a : Row} : Row.le' a a := id
-theorem Row.le'.trans {a b c : Row} : Row.le' a b -> Row.le' b c -> Row.le' a c :=
+theorem le'.refl {a : Row} : le' a a := id
+theorem le'.trans {a b c : Row} : le' a b -> le' b c -> le' a c :=
   λ h1 h2 l t h =>
     by
       apply h2
@@ -180,36 +180,36 @@ theorem Row.le'.trans {a b c : Row} : Row.le' a b -> Row.le' b c -> Row.le' a c 
       apply h
 
 instance : LE Row where
-  le := Row.le
+  le := le
 
 
 -- Rows are equivalent iff they are LE each other
 def Row.Equiv (a b : Row) : Prop := a ≤ b ∧ b ≤ a
 
-theorem Row.le.empty_is_refl {r : Row} : r ≤ .empty <-> r = .empty :=
+theorem le.empty_is_refl {r : Row} : r ≤ .empty <-> r = .empty :=
   Iff.intro (
     λ h =>
       match h with
-      | Row.le.empty => rfl
+      | le.empty => rfl
   ) (
     λ h => by
       rw [h];
-      apply Row.le.empty)
+      apply le.empty)
 
 mutual
 @[refl]
-theorem Row.le.refl {x : Pre.Row} : Row.le x x :=
+theorem le.refl {x : Row} : le x x :=
   match x with
   | .empty => .empty
-  | Pre.Row.extend r l t => by
-    apply Row.le.extendL <;> try trivial
-    apply Row.le.extendR <;> try trivial
-    apply Row.le.refl <;> trivial
+  | Row.extend r l t => by
+    apply le.extendL <;> try trivial
+    apply le.extendR <;> try trivial
+    apply le.refl <;> trivial
     apply In.first <;> try trivial
     apply Ty.Equiv.refl
 
 @[refl]
-theorem Ty.Equiv.refl {t : Pre.Ty} : Ty.Equiv t t :=
+theorem Ty.Equiv.refl {t : Ty} : Ty.Equiv t t :=
 match t with
 | .TVar _ => .TVar
 | .Singleton _ => .Singleton
@@ -222,7 +222,7 @@ match t with
 | .Qual _ _ => Ty.Equiv.Qual .refl .refl
 
 @[refl]
-theorem Pred.Equiv.refl {x : Pre.Pred} : Pred.Equiv x x :=
+theorem Pred.Equiv.refl {x : Pred} : Pred.Equiv x x :=
   match x with
   | .Contain _ _ => Pred.Equiv.Contain .refl .refl .refl .refl
   | .Combine _ _ _ =>
@@ -261,13 +261,13 @@ theorem Pred.Equiv.symm : ∀ {p q : Pred}, Pred.Equiv p q → Pred.Equiv q p :=
     | .TyEq a b => .TyEq a.symm b.symm
 end
 
-theorem Row.le.extendL_cancel {a b : Pre.Row} (h_le : (l : t, a) ≤ b) : a ≤ b :=
+theorem le.extendL_cancel {a b : Row} (h_le : (l : t, a) ≤ b) : a ≤ b :=
   match h_le with
   | .extendL _ _ _ _ h _ => h
   | .extendR _ => 
     by
-    apply Row.le.extendR
-    apply Row.le.extendL_cancel
+    apply le.extendR
+    apply le.extendL_cancel
     trivial
 
 
@@ -278,9 +278,9 @@ theorem in_equiv_in {l t1 t2} (a: Row) (h_in : In l t1 a) (e : Ty.Equiv t1 t2) :
     In.first l t2 a' tx (
     match t1, t2, tx, e, e' with
     | .Pi a, .Pi b, .Pi c, .Pi a_le_b b_le_a, .Pi a_le_c c_le_a =>
-      Ty.Equiv.Pi (Row.le.trans b_le_a  a_le_c) (Row.le.trans c_le_a a_le_b)
+      Ty.Equiv.Pi (le.trans b_le_a  a_le_c) (le.trans c_le_a a_le_b)
     | .Sigma _, .Sigma _, .Sigma _, .Sigma a_le_b b_le_a, .Sigma a_le_c c_le_a =>
-      Ty.Equiv.Sigma (Row.le.trans b_le_a  a_le_c) (Row.le.trans c_le_a a_le_b)
+      Ty.Equiv.Sigma (le.trans b_le_a  a_le_c) (le.trans c_le_a a_le_b)
     | .Qual p1 t1, .Qual p2 t2, .Qual p3 t3, .Qual pe te, .Qual pe' te' =>
       Ty.Equiv.Qual (Pred.Equiv.trans pe.symm pe') (Ty.Equiv.trans te.symm te')
     | .TFun _ _, .TFun _ _, .TFun _ _, .TFun ae re, .TFun ae' re' =>
@@ -299,7 +299,7 @@ theorem in_le_in {l a b t} (h_in : In l t a) (hle : a ≤ b)   : In l t b :=
   | .first _ _ a' t' e =>
     have h_le_r : (l : t' , a') ≤ b := hle
     match hle with
-    | @Row.le.extendR _ b' _ _ hle' => by
+    | @le.extendR _ b' _ _ hle' => by
       apply In.tail
       apply in_le_in _ hle'
       apply In.first _ _ _ _ e
@@ -307,11 +307,11 @@ theorem in_le_in {l a b t} (h_in : In l t a) (hle : a ≤ b)   : In l t b :=
       in_equiv_in _ l_t'_in_b e.symm
   | .tail _ _ _ _ a' hin' => by
     have lem : a' ≤ b := by
-      apply Row.le.extendL_cancel hle
+      apply le.extendL_cancel hle
     apply in_le_in hin' lem
 termination_by (sizeOf a + sizeOf b + sizeOf t)
 
-theorem Row.le.trans {a b c : Pre.Row}
+theorem le.trans {a b c : Row}
   (h_a_b : a ≤ b) (h_b_c : b ≤ c) : a ≤ c :=
   match a, b with
   | {}, {} => .empty
@@ -322,27 +322,27 @@ theorem Row.le.trans {a b c : Pre.Row}
     | .extendL _ _ _ _ a'_le_b hin' =>
       have hbc' : (lb : tb , b') ≤ c := h_b_c
       match h_b_c with
-      | @Row.le.extendR  _ c' lc tc hle' =>
+      | @le.extendR  _ c' lc tc hle' =>
         have lem'' : (la : ta, a') ≤ c' :=
-          Row.le.trans h_a_b hle'
+          le.trans h_a_b hle'
         have lem : a' ≤ c' :=
-          Row.le.trans a'_le_b hle'
+          le.trans a'_le_b hle'
         have lem' : a' ≤ (lc : tc, c') :=
           .extendR lem
         by
-        apply Row.le.extendR lem''
+        apply le.extendR lem''
       | .extendL _ _ _ _ b'_le_c hin'' =>
         by
-        apply Row.le.extendL _ _ _ _
-          (Row.le.trans a'_le_b hbc')
+        apply le.extendL _ _ _ _
+          (le.trans a'_le_b hbc')
           (in_le_in hin' hbc')
     | .extendR a_le_b' =>
       by
-      apply Row.le.trans a_le_b' _
-      apply Row.le.extendL_cancel h_b_c
+      apply le.trans a_le_b' _
+      apply le.extendL_cancel h_b_c
 termination_by (sizeOf a + sizeOf b + sizeOf c)
 
-theorem Ty.Equiv.trans {x y z : Pre.Ty} :
+theorem Ty.Equiv.trans {x y z : Ty} :
   Ty.Equiv x y → Ty.Equiv y z → Ty.Equiv x z :=
   λ h1 h2 =>
     match x, y, z with
@@ -358,9 +358,9 @@ theorem Ty.Equiv.trans {x y z : Pre.Ty} :
       match h1, h2 with
       | @Ty.Equiv.Pi _ _ h_ab h_ba, Ty.Equiv.Pi h_bc h_cb => 
         have h_ac :=
-          (@Row.le.trans a b c h_ab h_bc)
+          (@le.trans a b c h_ab h_bc)
         have h_ca :=
-          (@Row.le.trans c b a h_cb h_ba)
+          (@le.trans c b a h_cb h_ba)
         @Ty.Equiv.Pi
         a
         c
@@ -370,9 +370,9 @@ theorem Ty.Equiv.trans {x y z : Pre.Ty} :
       match h1, h2 with
       | @Ty.Equiv.Sigma _ _ h_ab h_ba, Ty.Equiv.Sigma h_bc h_cb => 
         have h_ac :=
-          (@Row.le.trans a b c h_ab h_bc)
+          (@le.trans a b c h_ab h_bc)
         have h_ca :=
-          (@Row.le.trans c b a h_cb h_ba)
+          (@le.trans c b a h_cb h_ba)
         @Ty.Equiv.Sigma
         a
         c
@@ -387,7 +387,7 @@ theorem Ty.Equiv.trans {x y z : Pre.Ty} :
             (@Ty.Equiv.trans t1' t2' t3' h_txy h_tyz)
 termination_by (sizeOf x + sizeOf y + sizeOf z)
 
-theorem Pred.Equiv.trans {x y z : Pre.Pred} :
+theorem Pred.Equiv.trans {x y z : Pred} :
   Pred.Equiv x y → Pred.Equiv y z → Pred.Equiv x z
 :=
   λ h1 h2 =>
@@ -397,21 +397,21 @@ theorem Pred.Equiv.trans {x y z : Pre.Pred} :
       | @Pred.Equiv.Contain _ _ _ _ ha_xy ha_yx hb_xy hb_yx,
          Pred.Equiv.Contain ha_yz ha_zy hb_yz hb_zy =>
           .Contain
-            (Row.le.trans ha_xy ha_yz)
-            (Row.le.trans ha_zy ha_yx)
-            (Row.le.trans hb_xy hb_yz)
-            (Row.le.trans hb_zy hb_yx)
+            (le.trans ha_xy ha_yz)
+            (le.trans ha_zy ha_yx)
+            (le.trans hb_xy hb_yz)
+            (le.trans hb_zy hb_yx)
     | .Combine _ _ _ =>
       match h1, h2 with
       | @Pred.Equiv.Combine _ _ _ _ _ _ ha_xy ha_yx hb_xy hb_yx hc_xy hc_yx,
          Pred.Equiv.Combine ha_yz ha_zy hb_yz hb_zy hc_yz hc_zy =>
           .Combine
-            (Row.le.trans ha_xy ha_yz)
-            (Row.le.trans ha_zy ha_yx)
-            (Row.le.trans hb_xy hb_yz)
-            (Row.le.trans hb_zy hb_yx)
-            (Row.le.trans hc_xy hc_yz)
-            (Row.le.trans hc_zy hc_yx)
+            (le.trans ha_xy ha_yz)
+            (le.trans ha_zy ha_yx)
+            (le.trans hb_xy hb_yz)
+            (le.trans hb_zy hb_yx)
+            (le.trans hc_xy hc_yz)
+            (le.trans hc_zy hc_yx)
     | .TyEq _ _ =>
       match h1, h2 with
       | @Pred.Equiv.TyEq _ _ _ _ ha_xy hb_xy,
@@ -429,9 +429,9 @@ theorem in_extend : In l t a -> In l t (l' : t', a) := by
 
 
 theorem Row.Equiv.trans {x y z: Row} (h_x_y : Row.Equiv x y) (h_y_z : Row.Equiv y z) : Row.Equiv x z :=
-  And.intro (Row.le.trans h_x_y.left h_y_z.left) (Row.le.trans h_y_z.right h_x_y.right)
+  And.intro (le.trans h_x_y.left h_y_z.left) (le.trans h_y_z.right h_x_y.right)
 
-instance : Std.IsPreorder Row := ⟨λ _ => Row.le.refl, λ _ _ _ => Row.le.trans⟩
+instance : Std.IsPreorder Row := ⟨λ _ => le.refl, λ _ _ _ => le.trans⟩
 
 
 -- This definition of equivalence is syntactic, up to reordering of fields
@@ -449,12 +449,12 @@ instance Pred.instSetoid : Setoid Pred where
   iseqv := ⟨λ _ => .refl, .symm, .trans⟩
 
 
-theorem le_equiv (a b : Pre.Row) : (Row.le a b ↔ Row.le' a b) :=
+theorem le_equiv (a b : Row) : (le a b ↔ le' a b) :=
   .intro
   (λ h l t h' =>
     match h with
-    | Row.le.empty => by cases h'
-    | @Row.le.extendR _ b' l' t' a_le_b => by
+    | le.empty => by cases h'
+    | @le.extendR _ b' l' t' a_le_b => by
       rw [le_equiv] at a_le_b <;> try trivial
       have lem : In l t b' := by
         apply a_le_b h'
@@ -485,10 +485,10 @@ theorem le_equiv (a b : Pre.Row) : (Row.le a b ↔ Row.le' a b) :=
             apply h
             apply In.first
             rfl
-          have lem' : Row.le' a' (lb : tb, b') := by
+          have lem' : le' a' (lb : tb, b') := by
             intro lx tx hx
             apply h
             apply in_extend hx
           rw [<-le_equiv] at lem'
-          apply Row.le.extendL <;> try trivial
+          apply le.extendL <;> try trivial
   )
